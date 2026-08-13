@@ -2,8 +2,8 @@
   "use strict";
 
   const PACKS = [
-    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@af6aef0/goar.pack.zip",
-    "https://raw.githubusercontent.com/KkDevAu/goar/af6aef0/goar.pack.zip",
+    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
+    "https://raw.githubusercontent.com/KkDevAu/goar/ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
     "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
     "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main/goar.pack.zip",
   ];

@@ -350,8 +350,8 @@
   "use strict";
 
   const PACKS = [
-    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@af6aef0/goar.pack.zip",
-    "https://raw.githubusercontent.com/KkDevAu/goar/af6aef0/goar.pack.zip",
+    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
+    "https://raw.githubusercontent.com/KkDevAu/goar/ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
     "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
     "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main/goar.pack.zip",
   ];
@@ -447,10 +447,14 @@
     document.head.appendChild(s);
   }
 
-  function runJs(text) {
-    const s = document.createElement("script");
-    s.textContent = text;
-    document.body.appendChild(s);
+  function runJs(text, name) {
+    try {
+      const s = document.createElement("script");
+      s.textContent = text;
+      document.body.appendChild(s);
+    } catch (e) {
+      throw new Error("script " + (name || "") + ": " + ((e && e.message) || e));
+    }
   }
 
   async function main() {
@@ -488,7 +492,7 @@
       pct(48);
       for (let i = 0; i < list.length; i++) {
         say("Load");
-        runJs(str(files[list[i]]));
+        runJs(str(files[list[i]]), list[i]);
         pct(48 + Math.round(((i + 1) / list.length) * 40));
       }
       pct(92);
