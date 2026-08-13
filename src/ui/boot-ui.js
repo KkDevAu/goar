@@ -78,15 +78,19 @@ function setCredReady(ok, msg) {
 }
 
 function showCredPhase() {
-  const bp = document.getElementById("bootPhase");
-  const cp = document.getElementById("credPhase");
-  if (bp) {
-    bp.hidden = true;
-    bp.style.display = "none";
-  }
-  if (cp) {
-    cp.hidden = false;
-    cp.classList.add("on");
+  if (typeof goarMotion !== "undefined" && goarMotion.toCred) {
+    goarMotion.toCred();
+  } else {
+    const bp = document.getElementById("bootPhase");
+    const cp = document.getElementById("credPhase");
+    if (bp) {
+      bp.hidden = true;
+      bp.style.display = "none";
+    }
+    if (cp) {
+      cp.hidden = false;
+      cp.classList.add("on");
+    }
   }
   try {
     const s = settingsSnapshot();
@@ -273,43 +277,46 @@ async function enterChatFromCreds() {
 }
 
 function finishEnterChat() {
-  try { el.setup.classList.add("hide"); el.setup.classList.remove("open"); } catch (_) {}
-  try { document.body.classList.add("goar-ready"); } catch (_) {}
-  try { el.app.classList.add("show"); } catch (_) {}
-  try { enableAgentMode(); } catch (_) {}
-  try { wireAgentUi(); } catch (_) {}
-  try {
-    const s = settingsSnapshot();
-    reflectActiveModel(s.apiModel, s.provider);
-    refreshAgentPill();
-    syncIndicators({ model: s.apiModel });
-  } catch (_) {}
-  try { fitAddon && fitAddon.fit(); } catch (_) {}
-  // Always refresh models in background for settings
-  loadModelsFromApi({ selected: settingsSnapshot().apiModel }).catch(() => {});
-  try {
-    const es = document.getElementById("emptyState");
-    if (es) es.classList.add("on");
-  } catch (_) {}
-  try { agentEl.input && agentEl.input.focus(); } catch (_) {}
-  try {
-    const paint = () => {
+  const after = () => {
+    try { document.body.classList.add("goar-ready"); } catch (_) {}
+    try { el.app.classList.add("show"); } catch (_) {}
+    try { enableAgentMode(); } catch (_) {}
+    try { wireAgentUi(); } catch (_) {}
+    try {
+      const s = settingsSnapshot();
+      reflectActiveModel(s.apiModel, s.provider);
+      refreshAgentPill();
+      syncIndicators({ model: s.apiModel });
+    } catch (_) {}
+    try { fitAddon && fitAddon.fit(); } catch (_) {}
+    loadModelsFromApi({ selected: settingsSnapshot().apiModel }).catch(() => {});
+    try {
+      const es = document.getElementById("emptyState");
+      if (es) es.classList.add("on");
+    } catch (_) {}
+    try { agentEl.input && agentEl.input.focus(); } catch (_) {}
+    try {
       const w = document.getElementById("welcome");
       const has = document.querySelector("#chat-inner .msg.user, #chat-inner .msg.ai");
-      if (!w) return;
-      if (has) {
-        w.classList.add("hide");
-        w.classList.remove("show", "on");
-      } else {
-        w.classList.remove("hide");
-        w.style.display = "";
-        w.classList.add("show", "on");
+      if (w) {
+        if (has) {
+          w.classList.add("hide");
+          w.classList.remove("show", "on");
+        } else {
+          w.classList.remove("hide");
+          w.style.display = "";
+          w.classList.add("show", "on");
+        }
       }
-    };
-    paint();
-    setTimeout(paint, 50);
-    setTimeout(paint, 400);
-  } catch (_) {}
+    } catch (_) {}
+    try { if (typeof goarMotion !== "undefined" && goarMotion.enterStage) goarMotion.enterStage(); } catch (_) {}
+  };
+  if (typeof goarMotion !== "undefined" && goarMotion.leaveSetup) {
+    goarMotion.leaveSetup(after);
+  } else {
+    try { el.setup.classList.add("hide"); el.setup.classList.remove("open"); } catch (_) {}
+    after();
+  }
 
   // Wire API into guest + force sandbox ONLINE for agent tools
   (async () => {

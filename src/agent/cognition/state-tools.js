@@ -479,6 +479,7 @@ function appendMsg(text, kind = "ai") {
       es.classList.add("hide");
       es.style.display = "none";
     }
+    try { if (typeof goarMotion !== "undefined" && goarMotion.leaveWelcome) goarMotion.leaveWelcome(); } catch (_) {}
   } catch (_) {}
   const div = document.createElement("div");
   const body = document.createElement("div");
@@ -546,6 +547,11 @@ function appendMsg(text, kind = "ai") {
   }
   div.appendChild(body);
   host.appendChild(div);
+  try {
+    if (kind === "user" || kind === "ai" || kind === "thought") {
+      if (typeof goarMotion !== "undefined" && goarMotion.enterMsg) goarMotion.enterMsg(div);
+    }
+  } catch (_) {}
   try { div.scrollIntoView({ block: "end", behavior: "smooth" }); } catch (_) {}
   try {
     while (host.children.length > 500) host.removeChild(host.firstChild);

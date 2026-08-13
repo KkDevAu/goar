@@ -6,6 +6,8 @@
   "providers/catalog.js",
   "providers/api.js",
   "providers/settings.js",
+  "vendor/anime.js",
+  "ui/motion.js",
   "ui/boot-ui.js",
   "sandbox/terminal.js",
   "net/compute-plane.js",
