@@ -1,9 +1,10 @@
 (function (global) {
   "use strict";
 
-  const EASE = "out(3)";
-  const EASE_IN = "in(2)";
+  const SETTLE = "out(4)";
+  const LEAVE = "in(2)";
   let started = false;
+  let barTween = null;
 
   function reduced() {
     try {
@@ -15,117 +16,141 @@
 
   function api() {
     const a = global.anime;
-    if (!a) return null;
-    return {
-      animate: a.animate || a,
-      timeline: a.createTimeline || a.timeline,
-      stagger: a.stagger,
-    };
+    if (!a || typeof a.animate !== "function") return null;
+    return a;
   }
 
-  function splitWords(el) {
-    if (!el || el.dataset.split === "1") return el ? [...el.querySelectorAll(".gw")] : [];
-    const text = el.textContent || "";
-    el.textContent = "";
-    const words = text.split(/(\s+)/);
-    words.forEach((w) => {
-      if (!w) return;
-      if (/^\s+$/.test(w)) {
-        el.appendChild(document.createTextNode(w));
-        return;
-      }
-      const s = document.createElement("span");
-      s.className = "gw";
-      s.textContent = w;
-      el.appendChild(s);
-    });
-    el.dataset.split = "1";
-    return [...el.querySelectorAll(".gw")];
+  function kill(targets) {
+    const a = api();
+    if (!a || !targets) return;
+    try {
+      if (typeof a.remove === "function") a.remove(targets);
+      else if (a.engine && a.engine.cancel) a.engine.cancel(targets);
+    } catch (_) {}
   }
 
   function studioOpen() {
     if (started) return;
     started = true;
-    const A = api();
+    const a = api();
     const mark = document.querySelector("#setup .goar-mark");
+    const line = document.getElementById("studio-line");
     const bar = document.getElementById("bootPhase");
-    if (reduced() || !A) {
+    if (reduced() || !a) {
       if (mark) mark.style.opacity = "1";
+      if (line) line.style.transform = "scaleX(1)";
       if (bar) bar.style.opacity = "1";
       return;
     }
     if (mark) {
       mark.style.opacity = "0";
-      A.animate(mark, {
-        opacity: [0, 1],
-        scale: [0.92, 1],
-        y: [10, 0],
-        filter: ["blur(10px)", "blur(0px)"],
-        duration: 1100,
-        ease: EASE,
-        delay: 180,
-      });
+      mark.style.filter = "blur(8px)";
     }
-    if (bar) {
-      bar.style.opacity = "0";
-      A.animate(bar, {
-        opacity: [0, 1],
-        y: [8, 0],
-        duration: 700,
-        delay: 720,
-        ease: EASE,
-      });
+    if (line) {
+      line.style.transform = "scaleX(0)";
+      line.style.opacity = "0";
+    }
+    if (bar) bar.style.opacity = "0";
+
+    const tl = typeof a.createTimeline === "function"
+      ? a.createTimeline({ defaults: { ease: SETTLE } })
+      : null;
+
+    const g = {
+      opacity: [0, 1],
+      scale: [0.97, 1],
+      y: [6, 0],
+      filter: ["blur(8px)", "blur(0px)"],
+      duration: 920,
+    };
+    const hair = {
+      scaleX: [0, 1],
+      opacity: [0, 0.45],
+      duration: 640,
+    };
+    const meta = {
+      opacity: [0, 1],
+      y: [4, 0],
+      duration: 480,
+    };
+
+    if (tl) {
+      if (mark) tl.add(mark, g, 160);
+      if (line) tl.add(line, hair, 780);
+      if (bar) tl.add(bar, meta, 980);
+    } else {
+      if (mark) a.animate(mark, Object.assign({ delay: 160, ease: SETTLE }, g));
+      if (line) a.animate(line, Object.assign({ delay: 780, ease: SETTLE }, hair));
+      if (bar) a.animate(bar, Object.assign({ delay: 980, ease: SETTLE }, meta));
     }
   }
 
+  function progress(pct) {
+    const fill = document.getElementById("barFill");
+    if (!fill) return;
+    const p = Math.max(0, Math.min(100, Number(pct) || 0));
+    if (reduced() || !api()) {
+      fill.style.width = p + "%";
+      return;
+    }
+    const a = api();
+    try { if (barTween && barTween.pause) barTween.pause(); } catch (_) {}
+    barTween = a.animate(fill, {
+      width: p + "%",
+      duration: 280,
+      ease: SETTLE,
+      composition: "blend",
+    });
+  }
+
   function toCred() {
-    const A = api();
+    const a = api();
     const bp = document.getElementById("bootPhase");
+    const line = document.getElementById("studio-line");
     const cp = document.getElementById("credPhase");
     if (!cp) return;
-    const run = () => {
+    const show = () => {
       if (bp) {
         bp.hidden = true;
         bp.style.display = "none";
       }
+      if (line) line.style.display = "none";
       cp.hidden = false;
       cp.classList.add("on");
     };
-    if (reduced() || !A) {
-      run();
+    if (reduced() || !a) {
+      show();
       return;
     }
-    if (bp && !bp.hidden) {
-      A.animate(bp, {
+    const leaving = [bp, line].filter(Boolean);
+    if (leaving.length) {
+      a.animate(leaving, {
         opacity: [1, 0],
-        y: [0, -10],
-        filter: ["blur(0px)", "blur(4px)"],
-        duration: 380,
-        ease: EASE_IN,
-        onComplete: run,
+        y: [0, -6],
+        duration: 280,
+        ease: LEAVE,
+        onComplete: show,
       });
-    } else run();
+    } else show();
+
     requestAnimationFrame(() => {
-      const bits = cp.querySelectorAll("label, select, input, .hint, #credGo, #credStatus");
+      const bits = [...cp.querySelectorAll(".hint, label, select, input, #credGo")];
       bits.forEach((n) => { n.style.opacity = "0"; });
-      if (A.stagger) {
-        A.animate(bits, {
-          opacity: [0, 1],
-          y: [14, 0],
-          filter: ["blur(5px)", "blur(0px)"],
-          duration: 520,
-          delay: A.stagger(70, { start: 120 }),
-          ease: EASE,
-        });
-      }
+      a.animate(bits, {
+        opacity: [0, 1],
+        y: [8, 0],
+        duration: 420,
+        delay: a.stagger ? a.stagger(45, { start: 80 }) : 80,
+        ease: SETTLE,
+      });
     });
   }
 
   function leaveSetup(then) {
     const setup = document.getElementById("setup");
-    const A = api();
+    const a = api();
     const done = () => { if (typeof then === "function") then(); };
-    if (!setup || reduced() || !A) {
+    if (!setup || reduced() || !a) {
       if (setup) {
         setup.classList.add("hide");
         setup.classList.remove("open");
@@ -133,113 +158,98 @@
       done();
       return;
     }
-    A.animate(setup, {
+    a.animate(setup, {
       opacity: [1, 0],
-      filter: ["blur(0px)", "blur(8px)"],
-      scale: [1, 0.985],
-      duration: 560,
-      ease: EASE_IN,
+      duration: 420,
+      ease: LEAVE,
       onComplete: () => {
         setup.classList.add("hide");
         setup.classList.remove("open");
         setup.style.opacity = "";
-        setup.style.filter = "";
-        setup.style.transform = "";
         done();
       },
     });
   }
 
   function enterStage() {
-    const A = api();
+    const a = api();
+    if (reduced() || !a) return;
     const welcome = document.getElementById("welcome");
     const composer = document.querySelector("#input-wrap .input-box");
     const rail = document.getElementById("side-rail");
-    if (reduced() || !A) return;
-    if (rail) {
-      A.animate(rail, { opacity: [0, 1], x: [-8, 0], duration: 500, ease: EASE });
-    }
+
+    if (rail) a.animate(rail, { opacity: [0, 1], duration: 360, ease: SETTLE });
+
     if (welcome && welcome.classList.contains("on")) {
       const mark = welcome.querySelector(".goar-mark");
       const title = welcome.querySelector(".w-title");
       const sub = welcome.querySelector(".w-sub");
-      const chips = welcome.querySelectorAll(".w-chip");
+      const chips = welcome.querySelector(".w-chips");
+      const tl = typeof a.createTimeline === "function"
+        ? a.createTimeline({ defaults: { ease: SETTLE } })
+        : null;
       if (mark) {
-        A.animate(mark, {
-          opacity: [0, 1],
-          scale: [0.9, 1],
-          filter: ["blur(8px)", "blur(0px)"],
-          duration: 800,
-          ease: EASE,
-        });
+        const g = { opacity: [0, 1], scale: [0.97, 1], y: [6, 0], filter: ["blur(6px)", "blur(0px)"], duration: 720 };
+        if (tl) tl.add(mark, g, 40);
+        else a.animate(mark, Object.assign({ delay: 40, ease: SETTLE }, g));
       }
       if (title) {
-        const words = splitWords(title);
-        A.animate(words.length ? words : title, {
-          opacity: [0, 1],
-          y: [12, 0],
-          filter: ["blur(6px)", "blur(0px)"],
-          duration: 640,
-          delay: words.length && A.stagger ? A.stagger(80, { start: 180 }) : 180,
-          ease: EASE,
-        });
+        const t = { opacity: [0, 1], y: [6, 0], duration: 520 };
+        if (tl) tl.add(title, t, 280);
+        else a.animate(title, Object.assign({ delay: 280, ease: SETTLE }, t));
       }
       if (sub) {
-        A.animate(sub, { opacity: [0, 1], y: [8, 0], duration: 500, delay: 420, ease: EASE });
+        const s = { opacity: [0, 1], duration: 400 };
+        if (tl) tl.add(sub, s, 460);
+        else a.animate(sub, Object.assign({ delay: 460, ease: SETTLE }, s));
       }
-      if (chips.length) {
-        A.animate(chips, {
-          opacity: [0, 1],
-          y: [8, 0],
-          duration: 440,
-          delay: A.stagger ? A.stagger(60, { start: 520 }) : 520,
-          ease: EASE,
-        });
+      if (chips) {
+        const c = { opacity: [0, 1], y: [4, 0], duration: 400 };
+        if (tl) tl.add(chips, c, 560);
+        else a.animate(chips, Object.assign({ delay: 560, ease: SETTLE }, c));
       }
     }
     if (composer) {
-      A.animate(composer, {
+      a.animate(composer, {
         opacity: [0, 1],
-        y: [18, 0],
-        duration: 620,
-        delay: 280,
-        ease: EASE,
+        y: [10, 0],
+        duration: 480,
+        delay: 200,
+        ease: SETTLE,
       });
     }
   }
 
   function enterMsg(el) {
     if (!el || reduced()) return;
-    const A = api();
-    if (!A) return;
-    A.animate(el, {
+    const a = api();
+    if (!a) return;
+    a.animate(el, {
       opacity: [0, 1],
-      y: [10, 0],
-      filter: ["blur(4px)", "blur(0px)"],
-      duration: 360,
-      ease: EASE,
+      y: [5, 0],
+      duration: 240,
+      ease: SETTLE,
     });
   }
 
   function leaveWelcome() {
     const w = document.getElementById("welcome");
     if (!w || w.classList.contains("hide")) return;
-    const A = api();
+    const a = api();
     const hide = () => {
       w.classList.add("hide");
       w.classList.remove("show", "on");
       w.style.display = "none";
     };
-    if (reduced() || !A) {
+    if (reduced() || !a) {
       hide();
       return;
     }
-    A.animate(w, {
+    a.animate(w, {
       opacity: [1, 0],
-      y: [-8, -16],
-      filter: ["blur(0px)", "blur(6px)"],
-      duration: 280,
-      ease: EASE_IN,
+      y: [0, -6],
+      duration: 220,
+      ease: LEAVE,
       onComplete: hide,
     });
   }
@@ -259,6 +269,7 @@
     enterStage,
     enterMsg,
     leaveWelcome,
+    progress,
     reduced,
   };
   boot();

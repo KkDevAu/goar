@@ -1,7 +1,10 @@
 function setProgress(n, msg, detail) {
   if (n != null && !Number.isNaN(n)) {
     const p = Math.max(0, Math.min(100, Math.round(n)));
-    if (el.bar) el.bar.style.width = p + "%";
+    if (el.bar) {
+      if (typeof goarMotion !== "undefined" && goarMotion.progress) goarMotion.progress(p);
+      else el.bar.style.width = p + "%";
+    }
     if (el.pct) el.pct.textContent = p + "%";
     try { document.getElementById("bootPhase")?.style.setProperty("--pct", p + "%"); } catch (_) {}
   }

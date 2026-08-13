@@ -63,9 +63,20 @@ html, body, #app, #shell, #main-stage {
 
 #studio {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
+}
+#studio-line {
+  width: 36px;
+  height: 1px;
+  margin-top: 22px;
+  background: #ececec;
+  transform: scaleX(0);
+  transform-origin: center;
+  opacity: 0;
+  will-change: transform, opacity;
 }
 .goar-mark {
   width: 64px;
@@ -75,21 +86,20 @@ html, body, #app, #shell, #main-stage {
   background: transparent;
   will-change: transform, opacity, filter;
 }
-#setup .goar-mark { width: 72px; height: 72px; margin: 0; }
-#welcome .goar-mark { width: 48px; height: 48px; margin: 0 auto 20px; }
-#welcome .w-title .gw { display: inline-block; }
+#setup .goar-mark { width: 68px; height: 68px; margin: 0; }
+#welcome .goar-mark { width: 44px; height: 44px; margin: 0 auto 18px; }
 #bootPhase { opacity: 0; }
-#setup { will-change: opacity, filter, transform; }
-#chat-inner .msg { will-change: transform, opacity, filter; }
+#setup { will-change: opacity; }
 .rail-btn, #send-btn, #credGo, .w-chip {
-  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), background 140ms ease, color 140ms ease;
 }
 .rail-btn:active, #send-btn:active, #credGo:active, .w-chip:active {
   transform: scale(0.96);
 }
 @media (prefers-reduced-motion: reduce) {
   #bootPhase { opacity: 1; }
-  .goar-mark, #setup, #chat-inner .msg { will-change: auto; }
+  #studio-line { transform: scaleX(1); opacity: 0.45; }
+  .goar-mark, #setup { will-change: auto; }
 }
 
 #setup {
