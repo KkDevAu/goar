@@ -66,8 +66,7 @@ html, body, #app, #shell, #main-stage {
   height: 56px;
   display: block;
   object-fit: contain;
-  background: #000;
-  border-radius: 8px;
+  background: transparent;
 }
 #setup .goar-mark { width: 64px; height: 64px; margin: 0 auto 24px; }
 #welcome .goar-mark { width: 48px; height: 48px; margin: 0 auto 20px; }
