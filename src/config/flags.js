@@ -1,0 +1,10 @@
+window.GOAR_MODULAR = true;
+window.GOAR_ALLOW_FREEZE = true;
+window.GOAR_FORCE_COLD = false;
+window.GOAR_AUTO_FREEZE = true;
+window.GOAR_WISP_URL = window.GOAR_WISP_URL || "";
+window.GOAR_GECKO_MODE = "embed";
+window.GOAR_GECKO_HOME = "https://duckduckgo.com/";
+window.GOAR_GUEST_RAM_MB = 512;
+
+window.GOAR_GECKO_GPU = true;
