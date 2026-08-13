@@ -10,6 +10,58 @@ function sanitizeMessagesForApi(messages) {
   }).filter(function (m) { return m.role && (m.content != null || m.tool_calls || m.tool_call_id); });
 }
 
+function slimToolsForApi(tools) {
+  return (tools || []).map(function (t) {
+    const fn = (t && t.function) || {};
+    const params = fn.parameters || {};
+    const props = params.properties || {};
+    const slim = {};
+    Object.keys(props).forEach(function (k) {
+      const p = props[k] || {};
+      slim[k] = { type: p.type || "string" };
+      if (p.enum) slim[k].enum = p.enum;
+    });
+    return {
+      type: "function",
+      function: {
+        name: fn.name,
+        description: String(fn.description || "").slice(0, 90),
+        parameters: { type: "object", properties: slim, required: params.required || [] },
+      },
+    };
+  });
+}
+
+function resolveMaxTokens(s) {
+  const provider = String((s && s.provider) || detectProvider((s && s.apiBase) || "") || "");
+  const base = String((s && s.apiBase) || "");
+  const groq = /groq/i.test(provider + base);
+  const saved = Number(s && s.maxTokens);
+  const cap = groq ? 1536 : 2048;
+  if (saved > 0 && saved <= cap) return saved;
+  return cap;
+}
+
+function resolveChatBody(s, messages, tools, stream, includeTools) {
+  const body = {
+    model: (s.apiModel || "").trim(),
+    messages: sanitizeMessagesForApi(messages),
+    temperature: Number(s.temperature != null ? s.temperature : DEFAULTS.temperature) || 0.2,
+    max_tokens: resolveMaxTokens(s),
+    stream: !!stream,
+  };
+  if (includeTools && tools && tools.length) {
+    body.tools = slimToolsForApi(tools);
+    body.tool_choice = "auto";
+    const provider = s.provider || detectProvider(s.apiBase);
+    const base = normalizeApiBase(s.apiBase || DEFAULTS.apiBase, provider);
+    if (/openrouter|openai|groq|nvidia|together|deepseek|fireworks|deepinfra/i.test(base + provider)) {
+      body.parallel_tool_calls = false;
+    }
+  }
+  return body;
+}
+
 async function openaiChat({ messages, tools, stream = false, includeTools = true, signal = null }) {
   const s = settingsSnapshot();
   const provider = s.provider || detectProvider(s.apiBase);
@@ -20,23 +72,7 @@ async function openaiChat({ messages, tools, stream = false, includeTools = true
   if ((getProvider(provider)?.requiresApiKey) && !(s.apiKey || "").trim() && !getProvider(provider)?.supportsOptionalApiKey) {
     throw new Error("No API key — open Settings and paste your key.");
   }
-  const body = {
-    model,
-    messages: sanitizeMessagesForApi(messages),
-    temperature: Number(s.temperature != null ? s.temperature : DEFAULTS.temperature) || 0.3,
-    max_tokens: Number(s.maxTokens != null ? s.maxTokens : DEFAULTS.maxTokens) || 8192,
-    stream: !!stream,
-  };
-  if (includeTools && tools && tools.length) {
-    body.tools = tools;
-    body.tool_choice = "auto";
-    // Some providers reject parallel_tool_calls — only send for known-good
-    // Prefer sequential tool planning from the model (less thrash on small models).
-    // Host may still parallelize pure-read tools in agentTurn.
-    if (/openrouter|openai|groq|nvidia|together|deepseek|fireworks|deepinfra/i.test(base + provider)) {
-      body.parallel_tool_calls = false;
-    }
-  }
+  const body = resolveChatBody(s, messages, tools, stream, includeTools);
   const headers = authHeaders(s.apiKey, base, provider);
   const maxRetries = 3;
   let lastErr = "";
@@ -62,6 +98,15 @@ async function openaiChat({ messages, tools, stream = false, includeTools = true
       }
       if (resp.status === 404) {
         throw new Error("Endpoint/model not found — check /base and /model. " + errText.slice(0, 160));
+      }
+      if (resp.status === 413 || (resp.status === 429 && /TPM|too large|tokens per minute|reduce your message/i.test(errText))) {
+        body.max_tokens = Math.max(256, Math.floor((body.max_tokens || 1536) / 2));
+        if (body.messages && body.messages.length > 6) {
+          const sys = body.messages[0] && body.messages[0].role === "system" ? [body.messages[0]] : [];
+          body.messages = sys.concat(body.messages.filter((m) => m.role !== "system").slice(-6));
+        }
+        await sleep(400);
+        continue;
       }
       if (resp.status === 429) {
         await sleep(Math.min((attempt + 1) * 3000, 15000));
@@ -260,6 +305,13 @@ function rebuildModelSelect(provider, selected) {
     });
   }
 }
+
+try {
+  window.fetchModels = fetchModels;
+  window.loadModelsFromApi = loadModelsFromApi;
+  window.openaiChat = openaiChat;
+} catch (_) {}
+
 
 
 
