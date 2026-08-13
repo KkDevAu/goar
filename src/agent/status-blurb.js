@@ -1,8 +1,6 @@
 function sandboxStatusBlurb() {
   try {
     const s = (typeof settingsSnapshot === "function") ? settingsSnapshot() : (typeof DEFAULTS !== "undefined" ? DEFAULTS : {});
-    const toolNames = (typeof getAgentTools === "function" ? getAgentTools() : (typeof AGENT_TOOLS !== "undefined" ? AGENT_TOOLS : []))
-      .map((x) => x.function && x.function.name).filter(Boolean);
     const nl = String.fromCharCode(10);
     const ready = !!(envReady || window.envReady || window.__GOAR_ENV_READY);
     const emu = !!(window.__emulator);
@@ -25,8 +23,6 @@ function sandboxStatusBlurb() {
       "model: " + (s.apiModel || ""),
       "api_base: " + (s.apiBase || ""),
       "api_key_set: " + (!!(s.apiKey && String(s.apiKey).trim())),
-      "tools_n: " + toolNames.length,
-      "tools: " + toolNames.join(", "),
       "todos: " + (typeof agentState !== "undefined" ? agentState.todos.filter(function(x){return x.done}).length + "/" + agentState.todos.length : "0"),
       "plan: " + (typeof agentState !== "undefined" && agentState.plan ? agentState.plan.goal : "(none)"),
       "mission: " + (typeof agentState !== "undefined" && agentState.mission ? String(agentState.mission).slice(0, 160) : "(none)"),
@@ -61,8 +57,4 @@ async function toolEnvInfo() {
   ].join(nl);
 }
 
-/** Keep tool results available in full for the agent */
-function compactToolResult(name, raw) {
-  if (raw == null) return "";
-  return String(raw);
-}
+

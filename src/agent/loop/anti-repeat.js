@@ -85,7 +85,11 @@ function persistAgentChat() {
     }));
     // Integrated conversation for the model (same turns user sees), sans system prompt
     try {
-      const hist = (agentHistory || []).filter((m) => m && m.role !== "system").slice(-48);
+      const hist = (agentHistory || []).filter((m) => {
+        if (!m || !m.role || m.role === "system" || m.role === "tool") return false;
+        if (m.tool_calls) return false;
+        return true;
+      }).slice(-8).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 2000) }));
       localStorage.setItem(AGENT_HISTORY_KEY, JSON.stringify(hist));
     } catch (_) {}
     try { if (typeof saveCurrentSession === "function") saveCurrentSession({ checkpoint: true }); } catch (_) {}
@@ -133,7 +137,9 @@ function restoreAgentChat() {
   try {
     const hr = JSON.parse(localStorage.getItem(AGENT_HISTORY_KEY) || "null");
     if (Array.isArray(hr) && hr.length) {
-      agentHistory = hr.filter((m) => m && m.role && m.role !== "system");
+      agentHistory = hr.filter((m) => m && (m.role === "user" || m.role === "assistant") && !m.tool_calls)
+        .map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 2000) }))
+        .slice(-8);
     }
   } catch (_) {}
 }

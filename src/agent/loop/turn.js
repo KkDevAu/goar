@@ -76,11 +76,11 @@ async function agentTurn(userText) {
     const refreshSystem = () => {
       const sysCore = buildSysCore();
       if (!agentHistory.length) {
-        agentHistory.push({ role: "system", content: sysCore + pysecCatalogBlurb({ full: false }) });
+        agentHistory.push({ role: "system", content: sysCore });
       } else if (agentHistory[0] && agentHistory[0].role === "system") {
-        agentHistory[0].content = sysCore + pysecCatalogBlurb({ full: false });
+        agentHistory[0].content = sysCore;
       } else {
-        agentHistory.unshift({ role: "system", content: sysCore + pysecCatalogBlurb({ full: false }) });
+        agentHistory.unshift({ role: "system", content: sysCore });
       }
     };
 
@@ -155,7 +155,7 @@ async function agentTurn(userText) {
       let result;
       try {
         const call = () => openaiChatStream({
-        messages: agentHistory,
+        messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-12)),
         tools: getAgentTools(),
         signal: agentAbortController.signal,
         onThinkingDelta: (piece, full) => {
@@ -428,7 +428,7 @@ async function agentTurn(userText) {
         });
         let stopRef = null;
         const last = await openaiChatStream({
-          messages: agentHistory,
+          messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-12)),
           tools: [],
           includeTools: false,
           signal: agentAbortController.signal,

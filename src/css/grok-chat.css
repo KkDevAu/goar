@@ -62,13 +62,15 @@ html, body, #app, #shell, #main-stage {
 #btn-menu svg { fill: currentColor; stroke: none; }
 
 .goar-mark {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   display: block;
-  color: #f3f3f4;
+  object-fit: contain;
+  background: #000;
+  border-radius: 8px;
 }
-#setup .goar-mark { width: 48px; height: 48px; margin: 0 auto 24px; }
-#welcome .goar-mark { width: 40px; height: 40px; margin: 0 0 20px; }
+#setup .goar-mark { width: 64px; height: 64px; margin: 0 auto 24px; }
+#welcome .goar-mark { width: 48px; height: 48px; margin: 0 auto 20px; }
 
 #setup {
   background: #1a1b1e !important;

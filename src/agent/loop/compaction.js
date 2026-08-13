@@ -18,15 +18,15 @@
 
 const GOAR_COMPACTION = {
   /** ~ADK token_threshold — when prompt est. exceeds this, compact older events */
-  tokenThreshold: 22000,
+  tokenThreshold: 8000,
   /** Keep last N non-system messages raw after a compaction */
-  eventRetentionSize: 28,
+  eventRetentionSize: 10,
   /** ADK overlap_size: re-include this many trailing events from the compacted range */
   overlapSize: 4,
   /** Cap each tool payload in summaries (ADK _MAX_TOOL_CONTENT_CHARS = 2000) */
-  maxToolContentChars: 2000,
+  maxToolContentChars: 800,
   /** Soft cap for a single tool message stored in agentHistory for the model */
-  maxToolResultChars: 6000,
+  maxToolResultChars: 1200,
   /** Multi-wave continuity: steps per wave / max waves (seamless, no history wipe) */
   stepsPerWave: 24,
   maxWaves: 240,
