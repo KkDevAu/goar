@@ -14,6 +14,8 @@
   "net/dns.js",
   "net/mw-fabric.js",
   "net/gecko-plane.js",
+  "net/gecko-menu.js",
+  "net/gecko-features.js",
   "net/eruda-plane.js",
   "net/page-plane.js",
   "net/crypto-plane.js",
