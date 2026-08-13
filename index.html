@@ -349,8 +349,10 @@
 (function () {
   "use strict";
 
-  const PACK_LOCAL = "./goar.pack.zip";
-  const PACK_REMOTE = "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip";
+  const PACKS = [
+    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
+    "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main/goar.pack.zip",
+  ];
   const CSS = [
     "src/css/xterm.css",
     "src/css/app.css",
@@ -424,12 +426,11 @@
   }
 
   async function fetchPack() {
-    const urls = [PACK_LOCAL, PACK_REMOTE];
     let last = null;
-    for (const url of urls) {
+    for (const url of PACKS) {
       try {
-        const res = await fetch(url, { cache: "force-cache" });
-        if (!res.ok) { last = new Error(url + " " + res.status); continue; }
+        const res = await fetch(url, { cache: "default" });
+        if (!res.ok) { last = new Error("pack " + res.status); continue; }
         return await res.arrayBuffer();
       } catch (e) {
         last = e;
