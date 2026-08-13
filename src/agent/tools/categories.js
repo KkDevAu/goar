@@ -579,6 +579,16 @@
   );
 
   async function toolDiscover(args) {
+    try {
+      window.__GOAR_DISCOVER_N = (window.__GOAR_DISCOVER_N || 0) + 1;
+      if (window.__GOAR_DISCOVER_N > 1) {
+        return JSON.stringify({
+          ok: false,
+          stop: true,
+          note: "Already discovered this turn. Call guest / net / pysec_* and do the job.",
+        });
+      }
+    } catch (_) {}
     const q = String((args && (args.query || args.q || args.thought)) || "")
       .toLowerCase()
       .trim();

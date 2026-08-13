@@ -18,7 +18,7 @@
 
 const GOAR_COMPACTION = {
   /** ~ADK token_threshold — when prompt est. exceeds this, compact older events */
-  tokenThreshold: 8000,
+  tokenThreshold: 3500,
   /** Keep last N non-system messages raw after a compaction */
   eventRetentionSize: 10,
   /** ADK overlap_size: re-include this many trailing events from the compacted range */
@@ -342,7 +342,6 @@ function maybeCompactAgentHistory(opts) {
   const compactMsg = {
     role: "user",
     content: summary,
-    _compaction: true,
   };
 
   agentHistory = sys ? [sys, compactMsg].concat(keep) : [compactMsg].concat(keep);
@@ -411,7 +410,7 @@ async function maybeCompactAgentHistoryAsync(opts) {
     agentState.compactionSummary = summary;
     agentState.compactionRange = { compactedCount: toCompact.length, keptCount: keep.length, tokensBefore: tokens, at: Date.now(), llm: true };
   }
-  const compactMsg = { role: "user", content: summary, _compaction: true };
+  const compactMsg = { role: "user", content: summary };
   agentHistory = sys ? [sys, compactMsg].concat(keep) : [compactMsg].concat(keep);
   const tokensAfter = estimatePromptTokens(agentHistory);
   try {

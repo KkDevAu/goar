@@ -21,6 +21,7 @@ async function agentTurn(userText) {
   recentToolFingerprints = [];
   pathActionCounts = Object.create(null);
   agentTurn._loopSteps = 0;
+  try { window.__GOAR_DISCOVER_N = 0; } catch (_) {}
   if (agentEl.send) agentEl.send.disabled = true;
   const t0 = performance.now();
   let toolCount = 0;
@@ -155,7 +156,7 @@ async function agentTurn(userText) {
       let result;
       try {
         const call = () => openaiChatStream({
-        messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-12)),
+        messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-8)),
         tools: getAgentTools(),
         signal: agentAbortController.signal,
         onThinkingDelta: (piece, full) => {
@@ -369,7 +370,6 @@ async function agentTurn(userText) {
               "[continuity] Wave " + (waves + 1) + " of the same mission. " +
               "Older tool transcript was compacted into ROLLING CONTEXT. " +
               "Continue the PRIMARY USER REQUEST — do not restart. Tools stay available.",
-            _compaction: true,
           });
           try {
             appendMsg("wave " + (waves + 1) + " · same mission (context compacted, not reset)", "sys");
@@ -428,7 +428,7 @@ async function agentTurn(userText) {
         });
         let stopRef = null;
         const last = await openaiChatStream({
-          messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-12)),
+          messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-8)),
           tools: [],
           includeTools: false,
           signal: agentAbortController.signal,

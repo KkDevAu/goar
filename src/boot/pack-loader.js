@@ -99,10 +99,14 @@
     document.head.appendChild(s);
   }
 
-  function runJs(text) {
-    const s = document.createElement("script");
-    s.textContent = text;
-    document.body.appendChild(s);
+  function runJs(text, name) {
+    try {
+      const s = document.createElement("script");
+      s.textContent = text;
+      document.body.appendChild(s);
+    } catch (e) {
+      throw new Error("script " + (name || "") + ": " + ((e && e.message) || e));
+    }
   }
 
   async function main() {
@@ -140,7 +144,7 @@
       pct(48);
       for (let i = 0; i < list.length; i++) {
         say("Load");
-        runJs(str(files[list[i]]));
+        runJs(str(files[list[i]]), list[i]);
         pct(48 + Math.round(((i + 1) / list.length) * 40));
       }
       pct(92);
