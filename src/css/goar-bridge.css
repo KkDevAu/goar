@@ -1,22 +1,24 @@
 #setup {
-  position: fixed;
-  inset: 0;
-  z-index: 30000;
+  position: relative;
+  z-index: 1;
+  inset: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 14px;
   padding: 28px;
-  background: #000;
+  background: transparent;
+  min-height: 100dvh;
+  width: 100vw;
 }
 #setup.hide,
 body.goar-ready #setup { display: none !important; }
 #setup .logo { width: min(120px, 36vw); height: auto; display: block; filter: grayscale(1); }
 #setup .word { display: none !important; }
-#setup .bar { width: min(340px, 92vw); height: 3px; background: #1a1a1a; overflow: hidden; border-radius: 2px; }
-#barFill { height: 100%; width: 0; background: #e8e8e8; transition: width .2s ease; }
-#bootPhase { display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(340px, 92vw); }
+#setup .bar { width: min(280px, 78vw); height: 2px; background: #2c2d31; overflow: hidden; border-radius: 99px; }
+#barFill { height: 100%; background: #ececec; transition: width .25s linear; }
+#bootPhase { display: flex; flex-direction: column; align-items: center; gap: 0; width: min(280px, 78vw); }
 #bootPhase[hidden] { display: none !important; }
 #bootMeta { display: flex; align-items: baseline; justify-content: space-between; width: 100%; gap: 10px; }
 #pct { font: 12px ui-monospace, Menlo, monospace; color: #e8e8e8; min-width: 2.6em; }

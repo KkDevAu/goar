@@ -1,10 +1,20 @@
+(function () {
+  function scrubBadImages() {
+    document.querySelectorAll("img").forEach(function (img) {
+      const s = img.getAttribute("src") || "";
+      if (!s || s === "undefined" || /\/undefined$/.test(s)) {
+        img.src = "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png";
+      }
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", scrubBadImages);
+  else scrubBadImages();
+})();
+
 function setProgress(n, msg, detail) {
   if (n != null && !Number.isNaN(n)) {
     const p = Math.max(0, Math.min(100, Math.round(n)));
-    if (el.bar) {
-      if (typeof goarMotion !== "undefined" && goarMotion.progress) goarMotion.progress(p);
-      else el.bar.style.width = p + "%";
-    }
+    if (el.bar) el.bar.style.width = p + "%";
     if (el.pct) el.pct.textContent = p + "%";
     try { document.getElementById("bootPhase")?.style.setProperty("--pct", p + "%"); } catch (_) {}
   }
@@ -92,7 +102,8 @@ function showCredPhase() {
     }
     if (cp) {
       cp.hidden = false;
-      cp.classList.add("on");
+      cp.removeAttribute("hidden");
+      cp.classList.add("on", "show");
     }
   }
   try {
@@ -283,6 +294,7 @@ function finishEnterChat() {
   const after = () => {
     try { document.body.classList.add("goar-ready"); } catch (_) {}
     try { el.app.classList.add("show"); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent("goar:ready")); } catch (_) {}
     try { enableAgentMode(); } catch (_) {}
     try { wireAgentUi(); } catch (_) {}
     try {
@@ -312,14 +324,23 @@ function finishEnterChat() {
         }
       }
     } catch (_) {}
+    try { if (typeof geckoShow === "function") geckoShow(); } catch (_) {}
     try { if (typeof goarMotion !== "undefined" && goarMotion.enterStage) goarMotion.enterStage(); } catch (_) {}
   };
-  if (typeof goarMotion !== "undefined" && goarMotion.leaveSetup) {
-    goarMotion.leaveSetup(after);
-  } else {
-    try { el.setup.classList.add("hide"); el.setup.classList.remove("open"); } catch (_) {}
-    after();
-  }
+
+  const go = () => {
+    if (typeof goarMotion !== "undefined" && goarMotion.leaveSetup) {
+      goarMotion.leaveSetup(after);
+    } else {
+      try { el.setup.classList.add("hide"); el.setup.classList.remove("open"); } catch (_) {}
+      after();
+    }
+  };
+
+  const wait = (typeof waitForGoarPlanes === "function")
+    ? waitForGoarPlanes(20000)
+    : Promise.resolve();
+  Promise.resolve(wait).then(go).catch(go);
 
   // Wire API into guest + force sandbox ONLINE for agent tools
   (async () => {
@@ -371,6 +392,11 @@ function showErr(m) {
   if (el.err) {
     el.err.textContent = m;
     el.err.classList.add("show");
+  }
+  const net = document.getElementById("err-network") || document.getElementById("err-parse");
+  if (net) {
+    net.textContent = m;
+    net.classList.add("show");
   }
   if (el.detail) el.detail.textContent = m;
   if (el.retry) el.retry.classList.add("show");

@@ -32,6 +32,36 @@ function consumeAttachments() {
   ).join("");
 }
 
+function showTurnAck() {
+  try {
+    const w = document.getElementById("welcome");
+    if (w) {
+      w.classList.add("hide");
+      w.classList.remove("show", "on");
+    }
+  } catch (_) {}
+  try {
+    const es = document.getElementById("emptyState");
+    if (es) es.classList.remove("on");
+  } catch (_) {}
+  let ref = null;
+  try {
+    if (typeof beginStreamMsg === "function") ref = beginStreamMsg("thought");
+  } catch (_) {}
+  if (ref && ref.el) {
+    ref.el.classList.add("ack", "streaming");
+    if (ref.el._fold) {
+      ref.el._fold.innerHTML = 'Thinking<span class="ack-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    }
+  }
+  window.__GOAR_ACK = ref;
+  try {
+    if (typeof setRunningUI === "function") setRunningUI(true, "thinking");
+    if (typeof setStatusFooter === "function") setStatusFooter("thinking…");
+  } catch (_) {}
+  return ref;
+}
+
 async function sendCommand() {
   let msg = (agentEl.input?.value || "").trim();
   const extra = consumeAttachments();
@@ -65,5 +95,6 @@ async function sendCommand() {
     return;
   }
   appendMsg(msg, "user");
+  showTurnAck();
   await agentTurn(msg);
 }

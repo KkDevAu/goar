@@ -1,538 +1,620 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#000000" />
-  <meta name="color-scheme" content="dark" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
   <title>GOAR</title>
-  <link rel="icon" href="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" type="image/png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    html,body{margin:0;background:#1a1b1e;color:#ececec;font-family:Inter,system-ui,sans-serif;min-height:100dvh}
-    #setup{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    html,body{margin:0;background:#1a1b1e;color:#ececec;font-family:Inter,system-ui,sans-serif;min-height:100dvh;width:100vw;overflow:hidden}
+    #particles-js{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+    #particles-js canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+    #setup{position:relative;z-index:1;min-height:100dvh;width:100vw;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;background:transparent}
+    #studio,#bootPhase,#credPhase{pointer-events:auto}
     #studio{display:flex;flex-direction:column;align-items:center;margin-bottom:22px}
     .goar-mark{width:68px;height:68px;object-fit:contain;background:transparent}
     #studio-line{width:36px;height:1px;margin-top:22px;background:#ececec;transform:scaleX(0);transform-origin:center;opacity:0}
-    #bootPhase{width:min(280px,78vw)}
+    #bootPhase{width:min(280px,78vw);opacity:1}
     .bar{background:#2c2d31;height:2px;border-radius:99px;overflow:hidden}
-    #barFill{height:100%;width:0;background:#ececec}
+    #barFill{height:100%;width:0;background:#ececec;transition:width .25s ease}
     #bootMeta{display:flex;justify-content:space-between;margin-top:10px;color:#6d6d70;font-size:12px}
     #err{color:#f88;margin-top:12px;font-size:13px}
+    #app{display:none;position:relative;z-index:1;width:100vw;height:100dvh;background:transparent}
+    #credPhase{display:none;flex-direction:column;gap:12px;width:min(320px,88vw)}
+    #credPhase.on,#credPhase.show{display:flex}
   </style>
 </head>
 <body>
-
-<div id="setup">
-  <div id="studio">
-    <img class="goar-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" alt="" width="72" height="72" />
-    <div id="studio-line" aria-hidden="true"></div>
-  </div>
-  <div id="bootPhase">
-    <div class="bar"><div id="barFill"></div></div>
-    <div id="bootMeta">
-      <span id="pct">0%</span>
-      <span id="step">Starting…</span>
+  <div id="particles-js" aria-hidden="true"></div>
+  <div id="setup">
+    <div id="studio">
+      <img class="goar-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" alt="" width="72" height="72">
+      <div id="studio-line" aria-hidden="true"></div>
     </div>
-    <div id="detail"></div>
-    <ul id="bootList" hidden></ul>
+    <div id="bootPhase">
+      <div class="bar"><div id="barFill"></div></div>
+      <div id="bootMeta"><span id="pct">0%</span> <span id="step">Starting…</span></div>
+      <div id="detail"></div>
+      <div id="err"></div>
+      <ul id="bootList" hidden></ul>
+    </div>
+    <div id="credPhase" hidden>
+      <p class="hint">Provider + API key · models load live from your API</p>
+      <div>
+        <label for="credProvider">Provider</label>
+        <select id="credProvider"></select>
+      </div>
+      <div>
+        <label for="credKey">API key</label>
+        <input id="credKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste API key">
+      </div>
+      <div id="credBaseWrap">
+        <label for="credBase">API base URL</label>
+        <input id="credBase" type="url" autocomplete="off" spellcheck="false" placeholder="Auto from provider">
+      </div>
+      <div>
+        <label for="credModel">Model</label>
+        <select id="credModel"><option value="">Paste key to load models…</option></select>
+      </div>
+      <div id="credStatus"></div>
+      <button type="button" id="retry">Retry boot</button>
+      <button type="button" id="credGo" disabled>ENTER CHAT</button>
+    </div>
   </div>
-  <div id="credPhase" hidden>
-    <p class="hint">Provider + API key · models load live from your API</p>
+  <div id="handoff-banner" hidden>
+    <div><b>Needs you on the shared computer</b> — <span id="handoff-msg">Action required</span>.</div>
     <div>
-      <label for="credProvider">Provider</label>
-      <select id="credProvider"></select>
+      <button type="button" id="handoff-computer">Open Computer</button>
+      <button type="button" id="handoff-clear">I finished — continue</button>
     </div>
-    <div>
-      <label for="credKey">API key</label>
-      <input id="credKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste API key" />
-    </div>
-    <div id="credBaseWrap">
-      <label for="credBase">API base URL</label>
-      <input id="credBase" type="url" autocomplete="off" spellcheck="false" placeholder="Auto from provider" />
-    </div>
-    <div>
-      <label for="credModel">Model</label>
-      <select id="credModel"><option value="">Paste key to load models…</option></select>
-    </div>
-    <div id="credStatus"></div>
-    <div id="err"></div>
-    <button type="button" id="retry">Retry boot</button>
-    <button type="button" id="credGo" disabled>ENTER CHAT</button>
   </div>
-</div>
-
-<div id="handoff-banner" hidden>
-  <div><b>Needs you on the shared computer</b> — <span id="handoff-msg">Action required</span>.</div>
-  <div>
-    <button type="button" id="handoff-computer">Open Computer</button>
-    <button type="button" id="handoff-clear">I finished — continue</button>
-  </div>
-</div>
-
-<div id="app">
-  <header id="header" hidden>
-    <span id="hdr-view-label" hidden></span>
-    <span id="hdr-status-text" hidden></span>
-    <span id="hdr-tokens" hidden></span>
-    <span id="active-model" hidden></span>
-    <button type="button" id="hdr-new" hidden></button>
-  </header>
-
-  <div id="shell">
-    <nav id="side-rail" aria-label="Primary">
-      <button type="button" class="rail-btn" id="btn-menu" title="Menu" aria-label="Menu">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="18" r="1.4"/></svg>
-      </button>
-      <button type="button" class="rail-btn" id="btn-new" title="New chat" aria-label="New chat">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
-      <button type="button" class="rail-btn active" data-view="chat" title="Chat">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </button>
-      <button type="button" class="rail-btn" data-view="computer" title="Firefox">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-      </button>
-      <button type="button" class="rail-btn" data-view="term" title="Terminal">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
-      </button>
-      <button type="button" class="rail-btn" data-view="ide" title="Files">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V7a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>
-      </button>
-      <div class="rail-grow"></div>
-      <button type="button" class="rail-btn" id="btn-settings" title="Settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
-      </button>
-    </nav>
-
-    <div id="main-stage">
-      <div id="chat" class="view-panel active">
-        <div id="chat-inner">
-          <div id="welcome" class="show on">
-            <img class="goar-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" alt="" width="56" height="56" />
-            <div class="w-title">What should we do?</div>
-            <div class="w-sub">Ask anything</div>
-            <div class="w-chips">
-              <div class="w-chip" data-q="Explore the workspace">Explore</div>
-              <div class="w-chip" data-q="Build something">Build</div>
-              <div class="w-chip" data-q="Open the live computer and search DuckDuckGo">Computer</div>
+  <div id="app">
+    <header id="header" hidden>
+      <span id="hdr-view-label" hidden></span>
+      <span id="hdr-status-text" hidden></span>
+      <span id="hdr-tokens" hidden></span>
+      <span id="active-model" hidden></span>
+      <button type="button" id="hdr-new" hidden></button>
+    </header>
+    <div id="shell">
+      <nav id="side-rail" aria-label="Primary">
+        <button type="button" class="rail-btn" id="btn-menu" title="Menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="18" r="1.4"/></svg>
+        </button>
+        <button type="button" class="rail-btn" id="btn-new" title="New chat" aria-label="New chat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button type="button" class="rail-btn active" data-view="chat" title="Chat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button type="button" class="rail-btn" data-view="computer" title="Firefox">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        </button>
+        <button type="button" class="rail-btn" data-view="term" title="Terminal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+        </button>
+        <button type="button" class="rail-btn" data-view="ide" title="Files">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V7a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>
+        </button>
+        <div class="rail-grow"></div>
+        <button type="button" class="rail-btn" id="btn-settings" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+        </button>
+      </nav>
+      <div id="main-stage">
+        <div id="chat" class="view-panel active">
+          <div id="chat-inner">
+            <div id="welcome" class="show on">
+              <img class="goar-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" alt="" width="56" height="56">
+              <div class="w-title">What should we do?</div>
+              <div class="w-sub">Ask anything</div>
+              <div class="w-chips">
+                <div class="w-chip" data-q="Explore the workspace">Explore</div>
+                <div class="w-chip" data-q="Build something">Build</div>
+                <div class="w-chip" data-q="Open the live computer and search DuckDuckGo">Computer</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div id="input-wrap">
-        <div id="chat-attach-chips"></div>
-        <div class="composer-tools">
-          <button type="button" id="chat-attach" title="Attach file">+ File</button>
-          <input type="file" id="chat-attach-input" multiple hidden />
-        </div>
-        <div class="input-box">
-          <button type="button" id="chat-plus" class="chat-plus-btn" title="Attach" aria-label="Attach">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          </button>
-          <textarea id="msg-input" rows="1" placeholder="Ask anything" enterkeyhint="send"></textarea>
-          <button type="button" id="send-btn" aria-label="Send">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<div class="drawer-overlay" id="drawer-overlay" aria-hidden="true">
-  <aside class="drawer" id="drawer" role="menu">
-    <button type="button" class="menu-item" data-view="chat">Chat</button>
-    <button type="button" class="menu-item" data-view="computer">Firefox</button>
-    <button type="button" class="menu-item" data-view="term">Terminal</button>
-    <button type="button" class="menu-item" data-view="ide">Files</button>
-    <button type="button" class="menu-item" id="menu-history">History</button>
-    <button type="button" class="menu-item" id="menu-settings">Settings</button>
-  </aside>
-</div>
-
-
-<div id="history-overlay" aria-hidden="true">
-  <aside id="history-panel" role="dialog" aria-label="History">
-    <div class="hist-head">
-      <span>History</span>
-      <button type="button" id="history-clear" title="Clear all" aria-label="Clear all">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-      </button>
-    </div>
-    <div id="history-list"></div>
-  </aside>
-</div>
-<div id="browser-tab" class="computer-tab" aria-hidden="true">
-  <div class="ff-chrome">
-    <div class="ff-tabs">
-      <div class="ff-tab on" id="ff-tab-0">
-        <img class="ff-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/gecko/chrome/logo.webp" alt="" width="14" height="14" />
-        <span id="ff-tab-title">DuckDuckGo</span>
-      </div>
-      <div class="ff-tabs-grow"></div>
-    </div>
-    <div class="ff-menubar" id="ff-menubar">
-      <button type="button" class="ff-top" data-menu="file">File</button>
-      <button type="button" class="ff-top" data-menu="edit">Edit</button>
-      <button type="button" class="ff-top" data-menu="view">View</button>
-      <button type="button" class="ff-top" data-menu="history">History</button>
-      <button type="button" class="ff-top" data-menu="bookmarks">Bookmarks</button>
-      <button type="button" class="ff-top" data-menu="tools">Tools</button>
-      <button type="button" class="ff-top" data-menu="help">Help</button>
-    </div>
-    <div class="ff-nav">
-      <button type="button" class="ff-btn" id="browser-back" title="Back" aria-label="Back">
-        <svg viewBox="0 0 24 24"><path d="M15 18 9 12l6-6"/></svg>
-      </button>
-      <button type="button" class="ff-btn" id="browser-forward" title="Forward" aria-label="Forward">
-        <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-      </button>
-      <button type="button" class="ff-btn" id="browser-reload" title="Reload" aria-label="Reload">
-        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
-      </button>
-      <form class="ff-url" id="browser-url-form">
-        <svg class="ff-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        <input id="browser-url" type="url" value="https://duckduckgo.com/" spellcheck="false" autocomplete="off" />
-      </form>
-      <button type="button" class="ff-btn" id="ff-ext" title="Extensions" aria-label="Extensions">
-        <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
-      </button>
-      <button type="button" class="ff-btn" id="ff-app" title="Firefox menu" aria-label="Firefox menu">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="18" r="1.3"/></svg>
-      </button>
-    </div>
-    <div id="ff-notify" class="ff-notify" hidden>
-      <span class="ffn-icon" aria-hidden="true"></span>
-      <span class="ffn-msg">Firefox prevented this site from opening a pop-up window.</span>
-      <span class="ffn-actions">
-        <button type="button" class="ffn-opt" id="ffn-options">Options</button>
-        <button type="button" class="ffn-allow" id="ffn-allow">Allow pop-ups</button>
-      </span>
-    </div>
-    <div id="ff-dialog" class="ff-dialog" hidden>
-      <div class="ffd-card">
-        <div class="ffd-msg"></div>
-        <input class="ffd-input" hidden />
-        <div class="ffd-row">
-          <button type="button" id="ffd-cancel">Cancel</button>
-          <button type="button" id="ffd-ok">OK</button>
-        </div>
-      </div>
-    </div>
-    <div id="ff-drop" hidden></div>
-    <div id="ff-addons" hidden>
-      <div class="ffa-head">Extensions <button type="button" id="ffa-close">✕</button></div>
-      <div id="ffa-list"></div>
-    </div>
-  </div>
-  <span id="browser-status" hidden></span>
-  <span id="gecko-status-pill" hidden></span>
-  <button type="button" id="browser-close" hidden></button>
-  <button type="button" id="computer-reload-vnc" hidden></button>
-  <div class="computer-stage">
-    <div id="browser-frame-wrap"></div>
-  </div>
-</div>
-
-<div id="term-tab" aria-hidden="true">
-  <div id="term-stage"></div>
-</div>
-
-<div id="files-sheet-overlay" aria-hidden="true">
-  <div id="files-sheet" role="dialog" aria-label="Workspace files">
-    <div class="files-head">
-      <h3>Files</h3>
-      <div class="files-actions">
-        <button type="button" id="files-refresh" title="Refresh">↻</button>
-        <button type="button" id="files-new" title="New file">New</button>
-        <button type="button" class="primary" id="files-upload-btn" title="Upload">Upload</button>
-        <input type="file" id="files-upload-input" multiple hidden />
-        <button type="button" id="files-close" title="Close">✕</button>
-      </div>
-    </div>
-    <div class="files-crumb" id="files-crumb">workspace</div>
-    <div id="files-list"><div class="files-empty">Loading…</div></div>
-  </div>
-</div>
-
-<div id="ide-shell" aria-hidden="true">
-  <div id="ide-top">
-    <button type="button" class="ide-tool-btn" id="ide-close" title="Close editor">✕</button>
-    <div class="ide-path" id="ide-path">—</div>
-    <span id="ide-lang">text</span>
-    <button type="button" class="ide-tool-btn" id="ide-new" title="New file">New</button>
-    <button type="button" class="ide-tool-btn" id="ide-format" title="Format">Format</button>
-    <button type="button" class="ide-tool-btn" id="ide-upload-ed" title="Upload">Upload</button>
-    <input type="file" id="ide-upload-input" hidden />
-    <button type="button" class="ide-tool-btn" id="ide-download">Download</button>
-    <button type="button" class="ide-tool-btn primary" id="ide-save">Save</button>
-  </div>
-  <div id="ide-body">
-    <div id="ide-editor-wrap">
-      <div id="ide-gutter" aria-hidden="true"></div>
-      <textarea id="ide-editor" spellcheck="false" wrap="off" aria-label="Code editor"></textarea>
-      <button type="button" id="ide-ai-btn" title="Edit with AI" aria-label="Edit with AI">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-      </button>
-      <div id="ide-ai-bubble" aria-hidden="true">
-        <div class="ai-head">
-          <span>Edit with AI</span>
-          <button type="button" id="ide-ai-close" style="background:none;border:0;color:#888;cursor:pointer;font-size:14px">✕</button>
-        </div>
-        <div class="ai-body">
-          <textarea id="ide-ai-input" placeholder="Describe the change…"></textarea>
-        </div>
-        <div id="ide-ai-status"></div>
-        <div class="ai-actions">
-          <button type="button" id="ide-ai-cancel">Cancel</button>
-          <button type="button" class="apply" id="ide-ai-apply">Apply edit</button>
+        <div id="input-wrap">
+          <div id="chat-attach-chips"></div>
+          <div class="composer-tools">
+            <button type="button" id="chat-attach" title="Attach file">+ File</button>
+            <input type="file" id="chat-attach-input" multiple hidden>
+          </div>
+          <div class="input-box">
+            <button type="button" id="chat-plus" class="chat-plus-btn" title="Attach" aria-label="Attach">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <textarea id="msg-input" rows="1" placeholder="Ask anything" enterkeyhint="send"></textarea>
+            <button type="button" id="send-btn" aria-label="Send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   </div>
-  <div id="ide-status">
-    <span id="ide-status-lang">plaintext</span>
-    <span id="ide-status-size">0 B</span>
-    <span id="ide-status-dirty"></span>
+  <div class="drawer-overlay" id="drawer-overlay" aria-hidden="true">
+    <aside class="drawer" id="drawer" role="menu">
+      <button type="button" class="menu-item" data-view="chat">Chat</button>
+      <button type="button" class="menu-item" data-view="computer">Firefox</button>
+      <button type="button" class="menu-item" data-view="term">Terminal</button>
+      <button type="button" class="menu-item" data-view="ide">Files</button>
+      <button type="button" class="menu-item" id="menu-history">History</button>
+      <button type="button" class="menu-item" id="menu-settings">Settings</button>
+    </aside>
   </div>
-</div>
-
-<div id="settings" role="dialog" aria-modal="true" aria-label="Settings">
-  <div class="sheet">
-    <h2>Settings <button type="button" class="action" id="btnCloseSettingsTop">Close</button></h2>
-    <p class="sub">Provider, key, and model. Models load live from the API.</p>
-    <div class="field"><label for="provider">Provider</label>
-      <select id="provider"></select>
-      <p class="stat" id="providerHint">Pick a provider. Your key only goes to that API.</p>
-    </div>
-    <div class="field"><label for="apiKey">API key</label><input id="apiKey" type="password" autocomplete="off" spellcheck="false" /></div>
-    <div class="field"><label for="apiBase">API base URL</label><input id="apiBase" type="url" autocomplete="off" spellcheck="false" /></div>
-    <div class="field"><label for="apiModel">Model</label>
-      <select id="apiModel"><option value="">Load from provider…</option></select>
-    </div>
-    <div class="field">
-      <button type="button" id="refreshModels">Refresh models</button>
-      <span id="modelsStatus"></span>
-    </div>
-    <div class="row-actions">
-      <button type="button" class="action primary" id="btnSaveSettings">Save & apply</button>
-      <button type="button" class="action" id="btnCloseSettings">Close</button>
-    </div>
-    <div class="sep"></div>
-    <p class="stat" id="freezeStatus">Snapshot: checking…</p>
-    <div class="row-actions">
-      <button type="button" class="action" id="btnFreezeNow">Save snapshot</button>
-      <button type="button" class="action" id="btnClearCache">Clear asset cache</button>
-      <button type="button" class="action danger" id="btnClearAll">Clear all local data</button>
-    </div>
-    <p class="stat" id="cacheStats"></p>
+  <div id="history-overlay" aria-hidden="true">
+    <aside id="history-panel" role="dialog" aria-label="History">
+      <div class="hist-head"><span>History</span>
+        <button type="button" id="history-clear" title="Clear all" aria-label="Clear all">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        </button>
+      </div>
+      <div id="history-list"></div>
+    </aside>
   </div>
-</div>
+  <div id="browser-tab" class="computer-tab" aria-hidden="true">
+    <div class="ff-chrome">
+      <div class="ff-tabs">
+        <div class="ff-tab on" id="ff-tab-0">
+          <img class="ff-mark" src="https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/brand/g.png" alt="" width="14" height="14">
+          <span id="ff-tab-title">DuckDuckGo</span>
+        </div>
+        <div class="ff-tabs-grow"></div>
+      </div>
+      <div class="ff-menubar" id="ff-menubar">
+        <button type="button" class="ff-top" data-menu="file">File</button>
+        <button type="button" class="ff-top" data-menu="edit">Edit</button>
+        <button type="button" class="ff-top" data-menu="view">View</button>
+        <button type="button" class="ff-top" data-menu="history">History</button>
+        <button type="button" class="ff-top" data-menu="bookmarks">Bookmarks</button>
+        <button type="button" class="ff-top" data-menu="tools">Tools</button>
+        <button type="button" class="ff-top" data-menu="help">Help</button>
+      </div>
+      <div class="ff-nav">
+        <button type="button" class="ff-btn" id="browser-back" title="Back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 18 9 12l6-6"/></svg></button>
+        <button type="button" class="ff-btn" id="browser-forward" title="Forward" aria-label="Forward"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button type="button" class="ff-btn" id="browser-reload" title="Reload" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg></button>
+        <form class="ff-url" id="browser-url-form">
+          <svg class="ff-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <input id="browser-url" type="url" value="https://duckduckgo.com/" spellcheck="false" autocomplete="off">
+        </form>
+        <button type="button" class="ff-btn" id="ff-ext" title="Extensions" aria-label="Extensions"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>
+        <button type="button" class="ff-btn" id="ff-app" title="Firefox menu" aria-label="Firefox menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="18" r="1.3"/></svg></button>
+      </div>
+      <div id="ff-notify" class="ff-notify" hidden>
+        <span class="ffn-icon" aria-hidden="true"></span>
+        <span class="ffn-msg">Firefox prevented this site from opening a pop-up window.</span>
+        <span class="ffn-actions">
+          <button type="button" class="ffn-opt" id="ffn-options">Options</button>
+          <button type="button" class="ffn-allow" id="ffn-allow">Allow pop-ups</button>
+        </span>
+      </div>
+      <div id="ff-dialog" class="ff-dialog" hidden>
+        <div class="ffd-card">
+          <div class="ffd-msg" id="ffd-message"></div>
+          <input class="ffd-input" hidden>
+          <div class="ffd-row">
+            <button type="button" id="ffd-cancel">Cancel</button>
+            <button type="button" id="ffd-ok">OK</button>
+          </div>
+        </div>
+      </div>
+      <div id="ff-drop" hidden></div>
+      <div id="ff-addons" hidden>
+        <div class="ffa-head">Extensions <button type="button" id="ffa-close">✕</button></div>
+        <div id="ffa-list"></div>
+      </div>
+    </div>
+    <span id="browser-status" hidden></span>
+    <span id="gecko-status-pill" hidden></span>
+    <button type="button" id="browser-close" hidden></button>
+    <button type="button" id="computer-reload-vnc" hidden></button>
+    <div class="computer-stage"><div id="browser-frame-wrap"></div></div>
+  </div>
+  <div id="term-tab" aria-hidden="true"><div id="term-stage"></div></div>
+  <div id="files-sheet-overlay" aria-hidden="true">
+    <div id="files-sheet" role="dialog" aria-label="Workspace files">
+      <div class="files-head">
+        <h3>Files</h3>
+        <div class="files-actions">
+          <button type="button" id="files-refresh" title="Refresh">↻</button>
+          <button type="button" id="files-new" title="New file">New</button>
+          <button type="button" class="primary" id="files-upload-btn" title="Upload">Upload</button>
+          <input type="file" id="files-upload-input" multiple hidden>
+          <button type="button" id="files-close" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="files-crumb" id="files-crumb">workspace</div>
+      <div id="files-list"><div class="files-empty">Loading…</div></div>
+    </div>
+  </div>
+  <div id="ide-shell" aria-hidden="true">
+    <div id="ide-top">
+      <button type="button" class="ide-tool-btn" id="ide-close" title="Close editor">✕</button>
+      <div class="ide-path" id="ide-path">—</div>
+      <span id="ide-lang">text</span>
+      <button type="button" class="ide-tool-btn" id="ide-new" title="New file">New</button>
+      <button type="button" class="ide-tool-btn" id="ide-format" title="Format">Format</button>
+      <button type="button" class="ide-tool-btn" id="ide-upload-ed" title="Upload">Upload</button>
+      <input type="file" id="ide-upload-input" hidden>
+      <button type="button" class="ide-tool-btn" id="ide-download">Download</button>
+      <button type="button" class="ide-tool-btn primary" id="ide-save">Save</button>
+    </div>
+    <div id="ide-body">
+      <div id="ide-editor-wrap">
+        <div id="ide-gutter" aria-hidden="true"></div>
+        <textarea id="ide-editor" spellcheck="false" wrap="off" aria-label="Code editor"></textarea>
+        <button type="button" id="ide-ai-btn" title="Edit with AI" aria-label="Edit with AI">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <div id="ide-ai-bubble" aria-hidden="true">
+          <div class="ai-head"><span>Edit with AI</span><button type="button" id="ide-ai-close">✕</button></div>
+          <div class="ai-body"><textarea id="ide-ai-input" placeholder="Describe the change…"></textarea></div>
+          <div id="ide-ai-status"></div>
+          <div class="ai-actions">
+            <button type="button" id="ide-ai-cancel">Cancel</button>
+            <button type="button" class="apply" id="ide-ai-apply">Apply edit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="ide-status"><span id="ide-status-lang">plaintext</span> <span id="ide-status-size">0 B</span> <span id="ide-status-dirty"></span></div>
+  </div>
+  <div id="settings" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="sheet">
+      <h2>Settings <button type="button" class="action" id="btnCloseSettingsTop">Close</button></h2>
+      <p class="sub">Provider, key, and model. Models load live from the API.</p>
+      <div class="field">
+        <label for="provider">Provider</label>
+        <select id="provider"></select>
+        <p class="stat" id="providerHint">Pick a provider. Your key only goes to that API.</p>
+      </div>
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="apiBase">API base URL</label>
+        <input id="apiBase" type="url" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="apiModel">Model</label>
+        <select id="apiModel"><option value="">Load from provider…</option></select>
+      </div>
+      <div class="field">
+        <button type="button" id="refreshModels">Refresh models</button>
+        <span id="modelsStatus"></span>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="action primary" id="btnSaveSettings">Save & apply</button>
+        <button type="button" class="action" id="btnCloseSettings">Close</button>
+      </div>
+      <div class="sep"></div>
+      <p class="stat" id="freezeStatus">Snapshot: checking…</p>
+      <div class="row-actions">
+        <button type="button" class="action" id="btnFreezeNow">Save snapshot</button>
+        <button type="button" class="action" id="btnClearCache">Clear asset cache</button>
+        <button type="button" class="action danger" id="btnClearAll">Clear all local data</button>
+      </div>
+      <p class="stat" id="cacheStats"></p>
+    </div>
+  </div>
+  <div id="view-term-hidden" hidden>
+    <div id="terminal"></div>
+    <div id="side-log"></div>
+    <input id="side-input" type="text" autocomplete="off">
+  </div>
+  <input id="kb" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <div id="screen_container" aria-hidden="true">
+    <div style="white-space:pre;font:14px monospace"></div>
+    <canvas></canvas>
+  </div>
+  <div id="toast"></div>
+  <button type="button" id="browser-mode" hidden></button>
+  <script>
+  (function () {
+    var host = document.getElementById("particles-js");
+    if (!host) return;
+    var canvas = document.createElement("canvas");
+    host.appendChild(canvas);
+    var ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
+    var dpr = window.devicePixelRatio > 1.5 ? 1.5 : (window.devicePixelRatio || 1);
+    var N = 0, CAP = 220;
+    var x = new Float32Array(CAP), y = new Float32Array(CAP);
+    var vx = new Float32Array(CAP), vy = new Float32Array(CAP);
+    var r = new Float32Array(CAP);
+    var mouseX = -1e6, mouseY = -1e6, mouseOn = 0;
+    var running = true, raf = 0, W = 0, H = 0;
+    var LINK = 180, LINK2 = LINK * LINK, REP = 200, REP2 = REP * REP;
+    var CELL = LINK;
+    var lastMove = 0;
 
-<div id="view-term-hidden" hidden>
-  <div id="terminal"></div>
-  <div id="side-log"></div>
-  <input id="side-input" type="text" autocomplete="off" />
-</div>
-<input id="kb" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-<div id="screen_container" aria-hidden="true"><div style="white-space:pre;font:14px monospace"></div><canvas></canvas></div>
-<div id="toast"></div>
-<button type="button" id="browser-mode" hidden></button>
-
-<script>
-(function () {
-  "use strict";
-
-  const PACKS = [
-    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
-    "https://raw.githubusercontent.com/KkDevAu/goar/ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
-    "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
-    "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main/goar.pack.zip",
-  ];
-  const CSS = [
-    "src/css/xterm.css",
-    "src/css/app.css",
-    "src/css/ghtml-shell.css",
-    "src/css/goar-bridge.css",
-    "src/css/grok-chat.css",
-  ];
-
-  function say(msg) {
-    const el = document.getElementById("step");
-    if (el) el.textContent = msg;
-    const d = document.getElementById("detail");
-    if (d) d.textContent = "";
-  }
-
-  function pct(n) {
-    const p = Math.max(0, Math.min(100, Math.round(n)));
-    const bar = document.getElementById("barFill");
-    const lab = document.getElementById("pct");
-    if (bar) bar.style.width = p + "%";
-    if (lab) lab.textContent = p + "%";
-  }
-
-  async function inflateRaw(u8) {
-    if (typeof DecompressionStream === "function") {
-      const ds = new DecompressionStream("deflate-raw");
-      const ab = await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
-      return new Uint8Array(ab);
+    function spawnAt(i, px, py) {
+      var ang = Math.random() * 6.283185307179586;
+      var sp = (0.25 + Math.random() * 0.55) * 0.7;
+      x[i] = px != null ? px : Math.random() * W;
+      y[i] = py != null ? py : Math.random() * H;
+      vx[i] = Math.cos(ang) * sp;
+      vy[i] = Math.sin(ang) * sp;
+      r[i] = 1.2 + Math.random() * 2.4;
     }
-    if (typeof pako !== "undefined" && pako.inflateRaw) return pako.inflateRaw(u8);
-    throw new Error("no deflate");
-  }
-
-  function str(u8) {
-    return new TextDecoder().decode(u8);
-  }
-
-  async function unzip(buf) {
-    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-    let eocd = -1;
-    for (let i = u8.length - 22; i >= 0 && i > u8.length - 22 - 65536; i--) {
-      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-    }
-    if (eocd < 0) throw new Error("zip: no directory");
-    const n = dv.getUint16(eocd + 10, true);
-    let off = dv.getUint32(eocd + 16, true);
-    const files = Object.create(null);
-    for (let i = 0; i < n; i++) {
-      if (dv.getUint32(off, true) !== 0x02014b50) throw new Error("zip: bad central");
-      const method = dv.getUint16(off + 10, true);
-      const comp = dv.getUint32(off + 20, true);
-      const size = dv.getUint32(off + 24, true);
-      const nameLen = dv.getUint16(off + 28, true);
-      const extra = dv.getUint16(off + 30, true);
-      const comment = dv.getUint16(off + 32, true);
-      const local = dv.getUint32(off + 42, true);
-      const name = str(u8.subarray(off + 46, off + 46 + nameLen));
-      off += 46 + nameLen + extra + comment;
-      if (name.endsWith("/")) continue;
-      const nameL = dv.getUint16(local + 26, true);
-      const extraL = dv.getUint16(local + 28, true);
-      const start = local + 30 + nameL + extraL;
-      const raw = u8.subarray(start, start + comp);
-      files[name] = method === 0 ? raw : await inflateRaw(raw);
-      if (files[name].length !== size && method !== 0) {
-        /* allow */
+    function seedGrid() {
+      var gap = 118;
+      var cols = Math.max(4, Math.ceil(W / gap));
+      var rows = Math.max(3, Math.ceil(H / gap));
+      N = 0;
+      for (var row = 0; row < rows && N < CAP; row++) {
+        for (var col = 0; col < cols && N < CAP; col++) {
+          var px = (col + 0.5) * (W / cols) + (Math.random() - 0.5) * (W / cols) * 0.55;
+          var py = (row + 0.5) * (H / rows) + (Math.random() - 0.5) * (H / rows) * 0.55;
+          spawnAt(N, Math.max(4, Math.min(W - 4, px)), Math.max(4, Math.min(H - 4, py)));
+          N++;
+        }
       }
     }
-    return files;
-  }
-
-  async function fetchPack() {
-    let last = null;
-    for (const url of PACKS) {
-      try {
-        const res = await fetch(url, { cache: "default" });
-        if (!res.ok) { last = new Error("pack " + res.status); continue; }
-        return await res.arrayBuffer();
-      } catch (e) {
-        last = e;
-      }
+    function resize() {
+      var vv = window.visualViewport;
+      var cw = Math.round((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth);
+      var ch = Math.round((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight);
+      if (cw === W && ch === H && canvas.width) return;
+      W = Math.max(1, cw); H = Math.max(1, ch);
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seedGrid();
     }
-    throw last || new Error("pack missing");
-  }
+    function tick() {
+      if (!running) return;
+      raf = requestAnimationFrame(tick);
+      if (document.hidden) return;
+      ctx.clearRect(0, 0, W, H);
+      var now = performance.now();
+      var doMouse = mouseOn && (now - lastMove < 1200);
+      var i, j, dx, dy, d2, inv, f, gx, gy, key, list, k, xi, yi;
+      var grid = Object.create(null);
 
-  function injectCss(text) {
-    const s = document.createElement("style");
-    s.textContent = text;
-    document.head.appendChild(s);
-  }
+      ctx.beginPath();
+      for (i = 0; i < N; i++) {
+        xi = x[i]; yi = y[i];
+        if (doMouse) {
+          dx = xi - mouseX; dy = yi - mouseY; d2 = dx * dx + dy * dy;
+          if (d2 < REP2 && d2 > 0.01) {
+            inv = 1 / Math.sqrt(d2);
+            f = (REP - d2 * inv) / REP * 1.15;
+            vx[i] += dx * inv * f;
+            vy[i] += dy * inv * f;
+          }
+        }
+        xi += vx[i]; yi += vy[i];
+        vx[i] *= 0.992; vy[i] *= 0.992;
+        if (xi < -8) xi = W + 8; else if (xi > W + 8) xi = -8;
+        if (yi < -8) yi = H + 8; else if (yi > H + 8) yi = -8;
+        x[i] = xi; y[i] = yi;
+        var rr = r[i];
+        ctx.moveTo(xi, yi - rr);
+        ctx.lineTo(xi + rr * 0.9, yi + rr * 0.7);
+        ctx.lineTo(xi - rr * 0.9, yi + rr * 0.7);
+        gx = (xi / CELL) | 0; gy = (yi / CELL) | 0;
+        key = gx + "," + gy;
+        if (!grid[key]) grid[key] = [];
+        grid[key].push(i);
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.fill();
 
-  function runJs(text, name) {
-    try {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.beginPath();
+      var neigh = [0,0, 1,0, 0,1, 1,1, -1,1];
+      for (key in grid) {
+        list = grid[key];
+        var comma = key.indexOf(",");
+        gx = +key.slice(0, comma); gy = +key.slice(comma + 1);
+        for (k = 0; k < 5; k++) {
+          var cell = k === 0 ? list : grid[(gx + neigh[k * 2]) + "," + (gy + neigh[k * 2 + 1])];
+          if (!cell) continue;
+          var same = cell === list;
+          for (i = 0; i < list.length; i++) {
+            var ia = list[i];
+            var start = same ? i + 1 : 0;
+            for (j = start; j < cell.length; j++) {
+              var ib = cell[j];
+              dx = x[ia] - x[ib]; dy = y[ia] - y[ib]; d2 = dx * dx + dy * dy;
+              if (d2 < LINK2 && d2 > 0) {
+                ctx.moveTo(x[ia], y[ia]);
+                ctx.lineTo(x[ib], y[ib]);
+              }
+            }
+          }
+        }
+      }
+      ctx.stroke();
+    }
+    var resizeT = 0;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeT);
+      resizeT = setTimeout(resize, 80);
+    }, { passive: true });
+    window.addEventListener("pointermove", function (e) {
+      mouseOn = 1; lastMove = performance.now();
+      mouseX = e.clientX; mouseY = e.clientY;
+    }, { passive: true });
+    window.addEventListener("pointerleave", function () { mouseOn = 0; }, { passive: true });
+    window.addEventListener("click", function (e) {
+      if (e.target && e.target.closest && e.target.closest("input,textarea,select,button,a,.rail-btn,.input-box")) return;
+      mouseX = e.clientX; mouseY = e.clientY;
+      var add = Math.min(4, CAP - N);
+      for (var i = 0; i < add; i++) { spawnAt(N, mouseX, mouseY); N++; }
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && running && !raf) raf = requestAnimationFrame(tick);
+    });
+    function stop() {
+      host.style.transition = "opacity .45s ease";
+      host.style.opacity = "0";
+      host.style.pointerEvents = "none";
+      setTimeout(function () {
+        running = false;
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        if (ctx) ctx.clearRect(0, 0, W, H);
+      }, 480);
+    }
+    resize();
+    raf = requestAnimationFrame(tick);
+    window.__goarStopParticles = stop;
+  })();
+  </script>
+  <script>
+  (function () {
+    "use strict";
+    const PACKS = [
+      "./goar.pack.zip",
+      "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
+      "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main/goar.pack.zip",
+    ];
+    const CSS = [
+      "src/css/xterm.css",
+      "src/css/app.css",
+      "src/css/ghtml-shell.css",
+      "src/css/goar-bridge.css",
+      "src/css/grok-chat.css",
+      "src/css/particles-layer.css",
+    ];
+    function say(msg) {
+      const el = document.getElementById("step");
+      if (el) el.textContent = msg;
+    }
+    function pct(n) {
+      const p = Math.max(0, Math.min(100, Math.round(n)));
+      const bar = document.getElementById("barFill");
+      const lab = document.getElementById("pct");
+      if (bar) bar.style.width = p + "%";
+      if (lab) lab.textContent = p + "%";
+    }
+    async function inflateRaw(u8) {
+      if (typeof DecompressionStream === "function") {
+        const ds = new DecompressionStream("deflate-raw");
+        const ab = await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+        return new Uint8Array(ab);
+      }
+      throw new Error("no deflate");
+    }
+    function str(u8) { return new TextDecoder().decode(u8); }
+    async function unzip(buf) {
+      const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+      let eocd = -1;
+      for (let i = u8.length - 22; i >= 0 && i > u8.length - 22 - 65536; i--) {
+        if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) throw new Error("zip: no directory");
+      const n = dv.getUint16(eocd + 10, true);
+      let off = dv.getUint32(eocd + 16, true);
+      const files = Object.create(null);
+      for (let i = 0; i < n; i++) {
+        if (dv.getUint32(off, true) !== 0x02014b50) throw new Error("zip: bad central");
+        const method = dv.getUint16(off + 10, true);
+        const comp = dv.getUint32(off + 20, true);
+        const nameLen = dv.getUint16(off + 28, true);
+        const extra = dv.getUint16(off + 30, true);
+        const comment = dv.getUint16(off + 32, true);
+        const local = dv.getUint32(off + 42, true);
+        const name = str(u8.subarray(off + 46, off + 46 + nameLen));
+        off += 46 + nameLen + extra + comment;
+        if (name.endsWith("/")) continue;
+        const nameL = dv.getUint16(local + 26, true);
+        const extraL = dv.getUint16(local + 28, true);
+        const start = local + 30 + nameL + extraL;
+        const raw = u8.subarray(start, start + comp);
+        files[name] = method === 0 ? raw : await inflateRaw(raw);
+      }
+      return files;
+    }
+    async function fetchPack() {
+      let last = null;
+      for (const url of PACKS) {
+        try {
+          const res = await fetch(url, { cache: "default" });
+          if (!res.ok) { last = new Error("pack " + res.status); continue; }
+          return await res.arrayBuffer();
+        } catch (e) { last = e; }
+      }
+      throw last || new Error("pack missing");
+    }
+    function injectCss(text) {
+      const s = document.createElement("style");
+      s.textContent = text;
+      document.head.appendChild(s);
+    }
+    function runJs(text) {
       const s = document.createElement("script");
       s.textContent = text;
       document.body.appendChild(s);
-    } catch (e) {
-      throw new Error("script " + (name || "") + ": " + ((e && e.message) || e));
     }
-  }
-
-  async function main() {
-    try {
-      pct(4);
-      say("Pack");
-      const buf = await fetchPack();
-      pct(18);
-      say("Open");
-      const files = await unzip(buf);
-      pct(40);
-      say("Style");
-      CSS.forEach((p) => {
-        const f = files[p];
-        if (f) injectCss(str(f));
-      });
-      const orderRaw = files["src/LOAD_ORDER.json"];
-      const order = orderRaw
-        ? JSON.parse(str(orderRaw)).map((p) => "src/" + p.replace(/^src\//, ""))
-        : [];
-      const extra = [
-        "src/vendor/xterm.js",
-        "src/vendor/xterm-addon-fit.js",
-        "src/vendor/xterm-addon-web-links.js",
-        "src/vendor/pako-inflate.js",
-        "src/vendor/json-schema.js",
-        "vendor/kv.js/kv-browser.js",
-      ];
-      const seen = new Set();
-      const list = extra.concat(order).filter((p) => {
-        if (seen.has(p) || !files[p]) return false;
-        seen.add(p);
-        return true;
-      });
-      pct(48);
-      for (let i = 0; i < list.length; i++) {
-        say("Load");
-        runJs(str(files[list[i]]), list[i]);
-        pct(48 + Math.round(((i + 1) / list.length) * 40));
-      }
-      pct(92);
-      say("Start");
-    } catch (e) {
-      say("Pack failed");
-      const err = document.getElementById("err");
-      if (err) {
-        err.textContent = (e && e.message) || String(e);
-        err.classList.add("show");
+    async function main() {
+      try {
+        pct(4); say("Pack");
+        const buf = await fetchPack();
+        pct(18); say("Open");
+        const files = await unzip(buf);
+        pct(40); say("Style");
+        CSS.forEach(function (p) { if (files[p]) injectCss(str(files[p])); });
+        const orderRaw = files["src/LOAD_ORDER.json"];
+        const order = orderRaw ? JSON.parse(str(orderRaw)).map(function (p) { return "src/" + p.replace(/^src\//, ""); }) : [];
+        const extra = [
+          "src/vendor/xterm.js",
+          "src/vendor/xterm-addon-fit.js",
+          "src/vendor/xterm-addon-web-links.js",
+          "src/vendor/pako-inflate.js",
+          "src/vendor/json-schema.js",
+          "vendor/kv.js/kv-browser.js",
+        ];
+        const seen = new Set();
+        const list = extra.concat(order).filter(function (p) {
+          if (seen.has(p) || !files[p]) return false;
+          seen.add(p);
+          return true;
+        });
+        pct(48);
+        for (let i = 0; i < list.length; i++) {
+          say("Load");
+          runJs(str(files[list[i]]));
+          pct(48 + Math.round(((i + 1) / list.length) * 40));
+        }
+        pct(92); say("Start");
+      } catch (e) {
+        say("Pack failed");
+        const err = document.getElementById("err");
+        if (err) { err.textContent = (e && e.message) || String(e); err.classList.add("show"); }
       }
     }
-  }
-
-  document.addEventListener(
-    "click",
-    function (e) {
-      const t = e.target && e.target.closest
-        ? e.target.closest("#btn-settings, #menu-settings, #drawer-settings")
-        : null;
+    document.addEventListener("click", function (e) {
+      const t = e.target && e.target.closest ? e.target.closest("#btn-settings, #menu-settings, #drawer-settings") : null;
       if (!t) return;
       e.preventDefault();
       e.stopPropagation();
       if (typeof openSettings === "function") openSettings();
       else {
         const box = document.getElementById("settings");
-        if (box) {
-          box.classList.add("open");
-          box.style.display = "flex";
-          box.style.zIndex = "10000";
-        }
+        if (box) { box.classList.add("open"); box.style.display = "flex"; box.style.zIndex = "10000"; }
       }
-    },
-    true
-  );
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", main);
-  else main();
-})();
-
-</script>
+    }, true);
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", main);
+    else main();
+  })();
+  </script>
 </body>
 </html>

@@ -2,6 +2,7 @@
   "use strict";
 
   const PACKS = [
+    "./goar.pack.zip",
     "https://cdn.jsdelivr.net/gh/KkDevAu/goar@ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
     "https://raw.githubusercontent.com/KkDevAu/goar/ea15c46af1061c3cad1526606838d0a6bc94c97e/goar.pack.zip",
     "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/goar.pack.zip",
@@ -13,6 +14,7 @@
     "src/css/ghtml-shell.css",
     "src/css/goar-bridge.css",
     "src/css/grok-chat.css",
+    "src/css/particles-layer.css",
   ];
 
   function say(msg) {

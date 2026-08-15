@@ -129,6 +129,7 @@
     glob: "Find files by pattern",
     grep: "Search file contents",
     workspace_tree: "Tree under path",
+    scratch: "Session pad /workspace/.scratch — op=write|read|list|clear",
     install_flask: "Offline flask wheel install",
     py_check: "Syntax/import check",
   };
@@ -262,23 +263,19 @@
     tools.push(
       fn(
         "guest",
-        "Run work in Alpine: shell, python, files. Pass action plus the args you need. If unsure which action, kit discover.",
+        "Alpine /workspace. action=" + Object.keys(GUEST_ACTIONS).join("|") + ". Extra fields go in kwargs or top-level (command,path,content,code).",
         {
-          action: { type: "string", description: "Intent: bash | python_exec | write_file | read_file | edit_file | list_dir | grep | …" },
-          command: { type: "string", description: "For bash" },
-          code: { type: "string", description: "For python_exec inline" },
+          action: { type: "string" },
+          kwargs: { type: "object" },
+          command: { type: "string" },
+          code: { type: "string" },
           path: { type: "string" },
-          content: { type: "string", description: "Full file for write_file" },
+          content: { type: "string" },
           old_string: { type: "string" },
           new_string: { type: "string" },
-          replace_all: { type: "boolean" },
           src: { type: "string" },
           dest: { type: "string" },
           pattern: { type: "string" },
-          root: { type: "string" },
-          args: { type: "string" },
-          timeout_ms: { type: "number" },
-          max_bytes: { type: "number" },
         },
         ["action"]
       )
@@ -287,45 +284,17 @@
     tools.push(
       fn(
         "net",
-        "Reach the web: fetch, search, in-app Firefox. Prefer browse when you need the page seen and the bytes. If unsure, kit discover.",
+        "Web + shared Firefox. action=" + Object.keys(NET_ACTIONS).join("|") + ". url/query/text/x/y in kwargs or top-level.",
         {
-          action: { type: "string", description: "Intent: browse | gecko_load | gecko_click | gecko_type | gecko_shot | web_fetch | …" },
+          action: { type: "string" },
+          kwargs: { type: "object" },
           url: { type: "string" },
           query: { type: "string" },
-          method: { type: "string" },
-          headers: { type: "object" },
-          body: { type: "string" },
-          timeout_ms: { type: "number" },
-          mode: { type: "string", description: "embed (automate) | chrome (full Firefox UI)" },
-          show: { type: "boolean" },
-          x: { type: "number", description: "Click x (px or 0–1)" },
-          y: { type: "number", description: "Click y (px or 0–1)" },
-          text: { type: "string", description: "For gecko_type" },
-          key: { type: "string", description: "For gecko_key" },
-          js: { type: "string", description: "For gecko_eval / inspect eval" },
-          selector: { type: "string", description: "For inspect / page click|type|waitFor" },
-          method: { type: "string", description: "page: goto|click|type|evaluate|waitFor|screenshot" },
-          ms: { type: "number", description: "For gecko_wait / page waitFor" },
-        },
-        ["action"]
-      )
-    );
-
-    tools.push(
-      fn(
-        "browser",
-        "Same as net for showing a page. Prefer net browse. Do not treat as a separate product.",
-        {
-          action: { type: "string", description: "browse | gecko_load | gecko_click | gecko_type | gecko_shot" },
-          url: { type: "string" },
+          text: { type: "string" },
           x: { type: "number" },
           y: { type: "number" },
-          text: { type: "string" },
-          key: { type: "string" },
-          js: { type: "string" },
-          ms: { type: "number" },
-          mode: { type: "string" },
-          show: { type: "boolean" },
+          method: { type: "string" },
+          body: { type: "string" },
         },
         ["action"]
       )
@@ -334,15 +303,13 @@
     tools.push(
       fn(
         "kv",
-        "Session memory cache. action + key/value. Discover if unsure.",
+        "Session KV. action=" + Object.keys(KV_ACTIONS).join("|"),
         {
-          action: { type: "string", description: "kv_get | kv_set | kv_del | kv_keys | kv_status" },
+          action: { type: "string" },
+          kwargs: { type: "object" },
           key: { type: "string" },
-          keys: { type: "array", items: { type: "string" } },
           value: {},
-          ns: { type: "string", description: "mem|mission|settings|gecko|session|tool|meta" },
-          ex: { type: "number", description: "TTL seconds" },
-          pattern: { type: "string" },
+          ns: { type: "string" },
         },
         ["action"]
       )
@@ -351,28 +318,16 @@
     tools.push(
       fn(
         "mind",
-        "Stay on the mission: plan, remember, finish. Do not narrate the menu.",
+        "Mission state. action=" + Object.keys(MIND_ACTIONS).join("|"),
         {
-          action: { type: "string", description: "create_plan | todo | think | complete_task | store_memory | set_phase | …" },
+          action: { type: "string" },
+          kwargs: { type: "object" },
           thought: { type: "string" },
-          summary: { type: "string" },
+          text: { type: "string" },
           goal: { type: "string" },
+          summary: { type: "string" },
           steps: { type: "array", items: { type: "string" } },
-          step: { type: "number" },
-          status: { type: "string" },
-          result: { type: "string" },
           content: { type: "string" },
-          query: { type: "string" },
-          items: { type: "string" },
-          item: { type: "string" },
-          phase: { type: "string" },
-          fact: { type: "string" },
-          decision: { type: "string" },
-          dead_end: { type: "string" },
-          current_step: { type: "string" },
-          category: { type: "string" },
-          importance: { type: "number" },
-          limit: { type: "number" },
         },
         ["action"]
       )
@@ -381,30 +336,15 @@
     tools.push(
       fn(
         "kit",
-        "Extend yourself: install a package, create a tool, or discover what exists for an intent. Unsure → action=discover query=…",
+        "Pyodide + discover + create_tool. action=" + Object.keys(KIT_ACTIONS).join("|"),
         {
-          action: { type: "string", description: "discover | micropip_install | create_tool | edit_tool | …" },
-          package: { type: "string" },
+          action: { type: "string" },
+          kwargs: { type: "object" },
+          query: { type: "string" },
           name: { type: "string" },
-          description: { type: "string" },
-          kind: { type: "string" },
           body: { type: "string" },
-          parameters: { type: "object" },
-          query: { type: "string", description: "For discover: what you are trying to do" },
-          algo: { type: "string", description: "crypto: sha256|md5|sha3|…" },
+          package: { type: "string" },
           data: { type: "string" },
-          key: { type: "string" },
-          password: { type: "string" },
-          url: { type: "string", description: "wasm module url" },
-          fn: { type: "string", description: "wasm export to call" },
-          args: { type: "array" },
-          id: { type: "string" },
-          instance: {},
-          schema: { type: "object" },
-          draft: { type: "string" },
-          type: { type: "string", description: "chart: bar|line|pie" },
-          title: { type: "string" },
-          values: { type: "array" },
         },
         ["action"]
       )
@@ -474,7 +414,11 @@
       domain: ["name", "host", "url"],
       ip: ["host", "address"],
       query: ["q", "search"],
+      algorithm: ["algo", "hash"],
+      format: ["fmt", "encoding", "enc"],
     };
+    if (out.format === "b64") out.format = "base64";
+    if (out.fmt === "b64") out.format = out.format || "base64";
     for (const p of params) {
       const key = p && p.name;
       if (!key) continue;
@@ -524,6 +468,11 @@
       }
       delete args.action;
       delete args.tool;
+      if (args.kwargs && typeof args.kwargs === "object" && !Array.isArray(args.kwargs)) {
+        const flat = Object.assign({}, args, args.kwargs);
+        delete flat.kwargs;
+        args = flat;
+      }
       return { kind: "core", name: action, args: args };
     }
 
@@ -579,21 +528,11 @@
   );
 
   async function toolDiscover(args) {
-    try {
-      window.__GOAR_DISCOVER_N = (window.__GOAR_DISCOVER_N || 0) + 1;
-      if (window.__GOAR_DISCOVER_N > 1) {
-        return JSON.stringify({
-          ok: false,
-          stop: true,
-          note: "Already discovered this turn. Call guest / net / pysec_* and do the job.",
-        });
-      }
-    } catch (_) {}
     const q = String((args && (args.query || args.q || args.thought)) || "")
       .toLowerCase()
       .trim();
     if (!q) {
-      return JSON.stringify({ ok: false, hint: "Say the job. Then I do it." });
+      return JSON.stringify({ ok: false, hint: "Say the job." });
     }
     const askingMap = /\b(tools?|available|securit|pysec|what can|capabilities|kit)\b/.test(q);
     if (askingMap) {
@@ -607,10 +546,9 @@
       }
       return JSON.stringify({
         ok: true,
-        stop: true,
         security_tools: total,
         lanes: lanes,
-        how: "Call pysec_crypto / pysec_http / pysec_recon / pysec_vuln / pysec_analyze with tool=<id> and kwargs. Or pysec with tool_id. Do NOT call discover or list_session_tools again. Pick a tool and run it.",
+        how: "Call pysec_crypto / pysec_http / pysec_recon / pysec_vuln / pysec_analyze with tool=<id> and kwargs. Or pysec with tool_id.",
         also: { guest: "bash files python", net: "browse fetch Firefox", kit: "micropip create_tool" }
       });
     }

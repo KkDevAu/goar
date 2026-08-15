@@ -5,7 +5,9 @@ const PYSEC_TOOL_COUNT = 141;
 try { if (typeof pysecCatalogTools === "function") { pysecCatalogTools._c = null; pysecCatalogTools(); } if (typeof refreshAgentTools === "function") refreshAgentTools(); } catch (e) { console.warn("[goar] catalog refresh", e); }
 
 /** Packaged offline core (assets/pyodide) — preferred */
-const PYSEC_PYODIDE_LOCAL = (typeof GOAR_REMOTE === "string" ? GOAR_REMOTE : "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/") + "assets/pyodide/";
+const PYSEC_PYODIDE_LOCAL = (typeof HEAVY !== "undefined" && HEAVY.pyodide)
+  ? HEAVY.pyodide
+  : "https://cdn.jsdelivr.net/pyodide/v0.27.0/full/";
 
 let __pysecCatalog = PYSEC_CATALOG_EMBED || "";
 let __pysecReady = false;

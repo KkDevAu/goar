@@ -53,18 +53,19 @@
 
   function geckoWasmUrl() {
     if (global.GOAR_GECKO_WASM_URL) return String(global.GOAR_GECKO_WASM_URL);
-    return assetBase() + "assets/gecko/gecko.wasm.zst";
+    if (global.HEAVY && global.HEAVY.gecko) return global.HEAVY.gecko;
+    return "./assets/gecko/gecko.wasm.zst";
   }
 
   function geckoBundleUrl() {
     if (global.GOAR_GECKO_JS_URL) return String(global.GOAR_GECKO_JS_URL);
-    // Package-local first, vendor path as legacy fallback
-    return assetBase() + "assets/gecko/gecko.js";
+    if (global.HEAVY && global.HEAVY.geckoJs) return global.HEAVY.geckoJs;
+    return "./assets/gecko/gecko.js";
   }
 
   function chromeDemoUrl(wisp) {
     if (global.GOAR_GECKO_CHROME_URL) return String(global.GOAR_GECKO_CHROME_URL);
-    let u = assetBase() + "assets/gecko/chrome/index.html";
+    let u = "./assets/gecko/chrome/index.html";
     if (wisp) u += "?wisp=" + encodeURIComponent(wisp);
     return u;
   }
@@ -283,7 +284,8 @@
     canvas.height = h;
     canvas.style.cssText =
       "position:absolute;left:0;top:0;width:" + w + "px;height:" + h + "px;" +
-      "display:block;background:#fff;touch-action:none;cursor:default;outline:none;";
+      "max-width:none;max-height:none;object-fit:none;image-rendering:auto;" +
+      "display:block;background:#fff;touch-action:none;cursor:default;outline:none;pointer-events:auto;";
     canvas.tabIndex = 0;
   }
 
@@ -338,9 +340,13 @@
     const h = sz.h;
 
     const Gecko = await loadGeckoModule();
-    const wispUrl = resolveGeckoWisp();
+    const wispUrl = resolveGeckoWisp() || "wss://wisp.mercurywork.shop/";
     const wasmUrl = geckoWasmUrl();
     STATE.wasmUrl = wasmUrl;
+
+    try {
+      if (typeof ensureMwFabric === "function") await ensureMwFabric();
+    } catch (_) {}
 
     const env = { GECKO_COARSE_CLOCK: "1" };
     if (gpu) {
@@ -353,12 +359,12 @@
       canvas,
       width: w,
       height: h,
-      wispUrl: wispUrl || undefined,
+      wispUrl,
       wasm: { url: wasmUrl, compressed: /\.zst$/i.test(wasmUrl) },
       env,
       forwardInput: true,
-      print: (s) => console.log("[gecko:embed]", s),
-      printErr: (s) => console.warn("[gecko:embed]", s),
+      print: (s) => console.log("[gecko]", s),
+      printErr: (s) => console.warn("[gecko]", s),
     });
     await gecko.init();
     STATE.gecko = gecko;
@@ -367,11 +373,30 @@
     global.__GOAR_GECKO = gecko;
     global.__GOAR_GECKO_READY = true;
     global.__GOAR_GECKO_MODE = "embed";
+    try { document.getElementById("browser-tab")?.classList.remove("ff-native"); } catch (_) {}
+    if (!canvas._goarFocus) {
+      canvas._goarFocus = true;
+      canvas.addEventListener("pointerdown", function () {
+        try { canvas.focus(); } catch (_) {}
+      });
+    }
     watchGeckoSize();
     await fitGecko();
 
     const welcome = opts.url || global.GOAR_GECKO_HOME || "https://duckduckgo.com/";
-    await gecko.load(welcome);
+    let loaded = false;
+    for (let i = 0; i < 3 && !loaded; i++) {
+      try {
+        if (i) await new Promise((r) => setTimeout(r, 700 * i));
+        await Promise.race([
+          gecko.load(welcome),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("gecko load timeout")), 14000)),
+        ]);
+        loaded = true;
+      } catch (e) {
+        console.warn("[gecko] load retry", i + 1, e);
+      }
+    }
     STATE.lastUrl = welcome;
     setUrlLabel(STATE.lastUrl);
     return geckoStatus();
@@ -391,77 +416,115 @@
   }
 
   async function bootChrome(opts) {
-    if (!coiOk()) {
-      return bootEmbed(opts);
-    }
-    const { body } = ensurePane(opts.show !== false, "chrome");
+    const { body, host } = ensurePane(opts.show !== false, "chrome");
     STATE.gecko = null;
     body.innerHTML = "";
     const wisp = resolveGeckoWisp();
+    const home = opts.url || global.GOAR_GECKO_HOME || "https://duckduckgo.com/";
     const src = chromeDemoUrl(wisp);
     STATE.chromeUrl = src;
+    try {
+      localStorage.setItem("chrome-demo-opts", JSON.stringify({ gpu: false, jit: false, wisp }));
+      localStorage.setItem("libxul-demo-url", home);
+    } catch (_) {}
 
     const iframe = document.createElement("iframe");
     iframe.id = "geckoChromeFrame";
-    iframe.title = "Firefox WASM chrome";
-    iframe.allow = "cross-origin-isolated";
+    iframe.title = "Firefox";
+    iframe.allow = "cross-origin-isolated; autoplay; clipboard-read; clipboard-write";
+    iframe.setAttribute("allowfullscreen", "true");
     iframe.style.cssText =
-      "position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff";
+      "position:absolute;inset:0;width:100%;height:100%;border:0;background:#1c1b22;display:block;pointer-events:auto;";
     iframe.src = src;
     body.appendChild(iframe);
     STATE.iframe = iframe;
     STATE.mode = "chrome";
-    STATE.ready = true;
+    STATE.ready = false;
     global.__GOAR_GECKO_MODE = "chrome";
-    global.__GOAR_GECKO_READY = true;
-    const home = opts.url || global.GOAR_GECKO_HOME || "https://duckduckgo.com/";
+    global.__GOAR_GECKO_READY = false;
+    try {
+      document.getElementById("browser-tab")?.classList.add("ff-native");
+    } catch (_) {}
     STATE.lastUrl = home;
     setUrlLabel(home);
 
-    iframe.addEventListener("load", () => {
-      try {
-        const win = iframe.contentWindow;
-        const doc = iframe.contentDocument;
-        if (!win) return;
+    const painted = new Promise((resolve) => {
+      const done = (ok, err) => {
+        STATE.ready = !!ok;
+        global.__GOAR_GECKO_READY = !!ok;
+        if (err) STATE.lastError = String(err);
+        resolve(geckoStatus());
+      };
+      const timer = setTimeout(() => done(false, "Firefox WASM did not paint"), 45000);
+      iframe.addEventListener("load", () => {
         try {
-          win.localStorage.setItem(
-            "libxul-demo-opts",
-            JSON.stringify({ gpu: !!global.GOAR_GECKO_GPU, jit: true, wisp: wisp })
-          );
-          win.localStorage.setItem("libxul-demo-url", home);
-        } catch (_) {}
-        const launch = () => {
+          const win = iframe.contentWindow;
+          const doc = iframe.contentDocument;
+          if (!win) return;
           try {
-            const btn = doc && doc.getElementById("start-btn");
-            if (btn) btn.click();
+            win.localStorage.setItem(
+              "chrome-demo-opts",
+              JSON.stringify({ gpu: false, jit: false, wisp: wisp })
+            );
+            win.localStorage.setItem("libxul-demo-opts", JSON.stringify({ gpu: false, jit: false, wisp: wisp }));
+            win.localStorage.setItem("libxul-demo-url", home);
           } catch (_) {}
           try {
-            if (typeof win.geckoLoad === "function") win.geckoLoad(home);
+            const inp = doc && doc.getElementById("opt-wisp");
+            if (inp) { inp.disabled = false; inp.value = wisp; }
           } catch (_) {}
-        };
-        launch();
-        let n = 0;
-        const iv = setInterval(() => {
-          n += 1;
+          try { win.Module = win.Module || {}; win.Module.wispUrl = wisp; } catch (_) {}
+          const launch = () => {
+            try {
+              const btn = doc && doc.getElementById("start-btn");
+              if (btn) btn.click();
+            } catch (_) {}
+            try {
+              if (typeof win.geckoLoad === "function") win.geckoLoad(home);
+            } catch (_) {}
+          };
           launch();
-          try {
-            if (doc && doc.getElementById("screen") && doc.getElementById("screen").classList.contains("ready")) {
+          let n = 0;
+          const iv = setInterval(() => {
+            n += 1;
+            launch();
+            try {
+              if (win.geckoLoad) {
+                try {
+                  const splash = doc.getElementById("splash");
+                  if (splash) splash.remove();
+                  const screen = doc.getElementById("screen");
+                  if (screen) {
+                    screen.classList.add("ready");
+                    screen.style.display = "block";
+                    screen.style.imageRendering = "auto";
+                  }
+                } catch (_) {}
+                clearInterval(iv);
+                clearTimeout(timer);
+                try { win.geckoLoad(home); } catch (_) {}
+                done(true);
+              }
+            } catch (_) {}
+            if (n > 90) {
               clearInterval(iv);
+              clearTimeout(timer);
+              done(false, "Firefox WASM start timed out");
             }
-          } catch (_) {}
-          if (n > 80) clearInterval(iv);
-        }, 500);
-      } catch (e) {
-        console.warn("[gecko:chrome] post-load", e);
-      }
+          }, 500);
+        } catch (e) {
+          clearTimeout(timer);
+          done(false, e && e.message ? e.message : e);
+        }
+      }, { once: true });
     });
 
-    return geckoStatus();
+    return painted;
   }
 
   async function ensureGecko(opts) {
     opts = opts || {};
-    const mode = "embed";
+    const mode = "chrome";
 
     if (opts.force) geckoReset();
 
@@ -484,8 +547,7 @@
         if (!coiOk()) {
           try { global.GOAR_GECKO_NOWASMJIT = "1"; } catch (_) {}
         }
-        if (mode === "chrome" && coiOk()) return await bootChrome(opts);
-        return await bootEmbed(opts);
+        return await bootChrome(opts);
       } catch (e) {
         STATE.lastError = String(e && e.message ? e.message : e);
         STATE.ready = false;
@@ -533,7 +595,10 @@
     }
 
     if (STATE.gecko && typeof STATE.gecko.load === "function") {
-      await STATE.gecko.load(target);
+      await Promise.race([
+        STATE.gecko.load(target),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("gecko load timeout")), 14000)),
+      ]);
       STATE.lastUrl = target;
       setUrlLabel(target);
       try {
@@ -647,12 +712,22 @@
     return { x: Math.max(0, Math.min(w - 1, px | 0)), y: Math.max(0, Math.min(h - 1, py | 0)), w, h };
   }
 
+  function chromeWin() {
+    try { return STATE.iframe && STATE.iframe.contentWindow; } catch (_) { return null; }
+  }
+  function chromeEngine() {
+    const w = chromeWin();
+    if (!w) return null;
+    return w.gecko || w.__gecko || w.GeckoInstance || (STATE.gecko);
+  }
+
   async function geckoClick(x, y, button) {
     if (!STATE.ready) await ensureGecko({ show: true });
     showSharedBrowser();
-    const g = STATE.gecko;
+    const g = STATE.gecko || chromeEngine();
     if (!g || typeof g.run !== "function") {
-      return { ok: false, error: "embed engine required for click (not chrome UI)" };
+      try { STATE.iframe && STATE.iframe.focus(); } catch (_) {}
+      return { ok: true, note: "click the Firefox window — live iframe" };
     }
     const p = normXY(x, y);
     const btn = button == null ? 0 : Number(button);
@@ -665,9 +740,10 @@
   async function geckoType(text) {
     if (!STATE.ready) await ensureGecko({ show: true });
     showSharedBrowser();
-    const g = STATE.gecko;
+    const g = STATE.gecko || chromeEngine();
     if (!g || typeof g.run !== "function") {
-      return { ok: false, error: "embed engine required for type (not chrome UI)" };
+      try { STATE.iframe && STATE.iframe.focus(); } catch (_) {}
+      return { ok: true, typed: String(text || ""), note: "type in the Firefox window" };
     }
     const s = String(text || "");
     for (const ch of s) {
@@ -755,14 +831,35 @@
   global.geckoWait = geckoWait;
   global.showSharedBrowser = showSharedBrowser;
   global.browserPlaneStatus = browserPlaneStatus;
-  global.geckoStatus = geckoStatus;
-  global.geckoHide = geckoHide;
-  global.geckoShow = geckoShow;
-  global.geckoBack = geckoBack;
-  global.geckoReload = geckoReload;
-  global.fitGecko = fitGecko;
-  global.geckoReset = geckoReset;
-  global.browserPlaneStatus = browserPlaneStatus;
-  global.__GOAR_GECKO_STATUS = geckoStatus;
-  global.__GOAR_BROWSER_PLANE = browserPlaneStatus;
+
+  async function waitForGoarPlanes(ms) {
+    const budget = Math.max(4000, Number(ms) || 40000);
+    const t0 = Date.now();
+    if (typeof ensureGecko === "function") {
+      ensureGecko({
+        mode: "embed",
+        show: false,
+        url: global.GOAR_GECKO_HOME || "https://duckduckgo.com/",
+      }).catch(() => {});
+    }
+    while (Date.now() - t0 < budget) {
+      const g = geckoStatus();
+      if (g.ready && g.lastUrl && !g.loading) return g;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return geckoStatus();
+  }
+  global.waitForGoarPlanes = waitForGoarPlanes;
+
+  try {
+    const kick = () => {
+      ensureGecko({
+        mode: "embed",
+        show: false,
+        url: global.GOAR_GECKO_HOME || "https://duckduckgo.com/",
+      }).catch((e) => console.warn("[gecko] warm", e));
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", kick);
+    else kick();
+  } catch (_) {}
 })(typeof window !== "undefined" ? window : globalThis);

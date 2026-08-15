@@ -66,6 +66,11 @@ function getStateContext() {
     });
   }
   try {
+    if (typeof GOAR_SCRATCH !== "undefined" && GOAR_SCRATCH && GOAR_SCRATCH.index && GOAR_SCRATCH.index.length) {
+      parts.push("SCRATCH: " + GOAR_SCRATCH.guestPath + " [" + GOAR_SCRATCH.index.join(", ") + "]");
+    }
+  } catch (_) {}
+  try {
     parts.push("kit: " + (__pysecReady ? "ready" : "loading") + " via pysec");
   } catch (_) { parts.push("kit: pysec"); }
   try {
@@ -374,7 +379,7 @@ function toolUpdateLedger(args) {
   return "Ledger updated. Goal: " + (L.goal || "(none)") + " · Step: " + (L.currentStep || "(none)");
 }
 function toolThink(args) {
-  const thought = String(args.thought || "").trim();
+  const thought = String(args.thought || args.text || args.content || "").trim();
   if (!thought) return "error: thought required";
   return "[thinking] " + thought;
 }
@@ -525,9 +530,7 @@ function appendMsg(text, kind = "ai") {
     div.appendChild(fold);
     body.classList.add("fold-body");
     body.textContent = text || "";
-    body.addEventListener("click", () => {
-      if (div.classList.contains("collapsed")) div.classList.remove("collapsed");
-    });
+    div._fold = fold;
   } else if (kind === "chart") {
     div.className = "msg chart";
     body.innerHTML = String(text || "");
@@ -587,6 +590,12 @@ function streamDelta(ref, fullText) {
   ref.body.textContent = clean;
   ref._full = clean;
   try {
+    if (ref.el && ref.el.classList.contains("thought") && ref.el._fold) {
+      ref.el._fold.textContent = "Thinking";
+      ref.el.classList.add("streaming");
+    }
+  } catch (_) {}
+  try {
     const chat = document.getElementById("chat");
     if (chat) chat.scrollTop = chat.scrollHeight;
   } catch (_) {}
@@ -595,10 +604,18 @@ function streamDelta(ref, fullText) {
 function endStreamMsg(ref) {
   if (!ref || !ref.el) return;
   ref.el.classList.remove("streaming");
-  // Drop empty stream bubbles (no content)
   try {
     const b = ref.body && ref.body.textContent ? ref.body.textContent.trim() : "";
-    if (!b) ref.el.remove();
+    if (!b) {
+      ref.el.remove();
+      return;
+    }
+    if (ref.el.classList.contains("thought") && ref.el._fold) {
+      ref.el.classList.remove("ack");
+      const n = b.split(/\s+/).filter(Boolean).length;
+      ref.el._fold.textContent = n > 4 ? ("Thought · " + n + " words") : "Thought";
+      ref.el.classList.add("collapsed");
+    }
   } catch (_) {}
 }
 

@@ -5,6 +5,7 @@ window.__goarMarkEnvReady = function (ok, detail) {
   window.__GOAR_ENV_READY = envReady;
   if (ok) {
     try { agentBootOff(); } catch (_) {}
+    try { if (typeof markTermReady === "function") markTermReady(); } catch (_) {}
     // Announce once only — avoid chat spam on re-probes
     if (!was && !window.__GOAR_ONLINE_ANNOUNCED) {
       window.__GOAR_ONLINE_ANNOUNCED = true;

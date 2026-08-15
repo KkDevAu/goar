@@ -5,9 +5,13 @@
 /** Production networking: WISP (full TCP/HTTPS). Override window.GOAR_WISP_URL */
 const NET_RELAYS = [
   (typeof window !== "undefined" && window.GOAR_WISP_URL) || null,
-  "wisps://wisp.mercurywork.shop/",
   "wss://wisp.mercurywork.shop/",
-].filter(Boolean);
+].filter(Boolean).map(function (u) {
+  u = String(u || "").trim();
+  if (u.startsWith("wisps://")) u = "wss://" + u.slice(8);
+  if (u.startsWith("wisp://")) u = "ws://" + u.slice(7);
+  return u;
+}).filter(Boolean);
 const NET_RELAY = NET_RELAYS[0];
 const NET_CONFIG = {
   mode: (typeof window !== "undefined" && window.GOAR_NET_MODE) || "wisp",

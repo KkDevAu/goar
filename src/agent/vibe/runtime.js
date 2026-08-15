@@ -8,6 +8,12 @@
     apiRetries: 4,
   };
 
+  function vibeIsSmallTalk(text) {
+    const t = String(text || "").trim().toLowerCase();
+    if (!t || t.length > 80) return false;
+    return /^(hi|hey|hello|howdy|yo|sup|hiya|thanks|thank you|ok|okay|gm|good (morning|evening|afternoon)|how are you|what('?s| is) up|who are you|what can you do)[\s!.?,]*$/i.test(t);
+  }
+
   function vibeMissionOpen() {
     try {
       if (typeof agentState === "undefined") return false;
@@ -15,7 +21,7 @@
       if (agentState.todos && agentState.todos.some((t) => t && !t.done)) return true;
       const m = String(agentState.mission || "").toLowerCase();
       if (!m) return false;
-      if (/^(hi|hey|hello|thanks|ok|okay|yo)\b/.test(m) && m.length < 24) return false;
+      if (vibeIsSmallTalk(m) || (/^(hi|hey|hello|thanks|ok|okay|yo)\b/.test(m) && m.length < 24)) return false;
       return /\b(explor|build|fix|implement|review|write|create|scan|test|refactor|ship|assess|audit|deploy|debug|analy|open|fetch|code|file|workspace)\b/.test(m);
     } catch (_) {
       return false;
@@ -109,6 +115,7 @@
   }
 
   global.VIBE_RUNTIME = VIBE_RUNTIME;
+  global.vibeIsSmallTalk = vibeIsSmallTalk;
   global.vibeMissionOpen = vibeMissionOpen;
   global.vibeShouldKeepGoing = vibeShouldKeepGoing;
   global.vibeContinueMessage = vibeContinueMessage;

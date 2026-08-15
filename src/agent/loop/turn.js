@@ -21,7 +21,6 @@ async function agentTurn(userText) {
   recentToolFingerprints = [];
   pathActionCounts = Object.create(null);
   agentTurn._loopSteps = 0;
-  try { window.__GOAR_DISCOVER_N = 0; } catch (_) {}
   if (agentEl.send) agentEl.send.disabled = true;
   const t0 = performance.now();
   let toolCount = 0;
@@ -69,8 +68,7 @@ async function agentTurn(userText) {
         (typeof sandboxStatusBlurb === "function" ? sandboxStatusBlurb() : "") +
         (stateCtx ? "\n\n## SESSION STATE\n" + stateCtx : "") +
         missionExtra +
-        "\n## INTERLOCK\n" +
-        "Do the job. Explore = workspace_tree. Never list tools. Same mission after compact.\n"
+        "Finish the task. Prove it works. Same mission after compact.\n"
       );
     };
 
@@ -158,15 +156,23 @@ async function agentTurn(userText) {
         const call = () => openaiChatStream({
         messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-8)),
         tools: getAgentTools(),
+        includeTools: !(step === 0 && waves === 0 && typeof vibeIsSmallTalk === "function" && vibeIsSmallTalk(userText)),
         signal: agentAbortController.signal,
         onThinkingDelta: (piece, full) => {
           thinkingFull = collapseDoubledWords(full);
-          if (!thinkRef) thinkRef = beginStreamMsg("thought");
+          if (!thinkRef) {
+            thinkRef = window.__GOAR_ACK || beginStreamMsg("thought");
+            window.__GOAR_ACK = null;
+          }
           streamDelta(thinkRef, thinkingFull);
           try { syncIndicators({ phase: "thinking" }); } catch (_) {}
         },
         onTextDelta: (piece, full) => {
           textFull = collapseDoubledWords(full);
+          if (window.__GOAR_ACK && !thinkRef) {
+            try { endStreamMsg(window.__GOAR_ACK); } catch (_) {}
+            window.__GOAR_ACK = null;
+          }
           if (!aiRef) aiRef = beginStreamMsg("ai");
           streamDelta(aiRef, textFull);
           try { syncIndicators({ phase: "streaming" }); } catch (_) {}
@@ -219,6 +225,7 @@ async function agentTurn(userText) {
         agentHistory.push({
           role: "assistant",
           content: content || null,
+          reasoning_content: thinking || undefined,
           tool_calls: toolCalls.map((tc) => ({
             id: tc.id,
             type: tc.type || "function",
@@ -381,11 +388,29 @@ async function agentTurn(userText) {
       // Final assistant message (no tools) — natural end of this turn
       if (content && content.trim()) {
         if (!aiRef) appendMsg(content, "ai");
-        agentHistory.push({ role: "assistant", content });
-      } else if (!thinking) {
-        appendMsg("(no content)", "sys");
-      } else {
-        agentHistory.push({ role: "assistant", content: "" });
+        agentHistory.push({ role: "assistant", content, reasoning_content: thinking || undefined });
+      } else if (toolCount > 0 && !agentAbort) {
+        try {
+          let wrapRef = null;
+          const wrap = await openaiChatStream({
+            messages: (agentHistory[0] && agentHistory[0].role === "system" ? [agentHistory[0]] : []).concat(agentHistory.filter((m) => m && m.role !== "system").slice(-8)).concat([
+              { role: "user", content: "Reply to the user in one or two sentences. Do not call tools." },
+            ]),
+            tools: [],
+            includeTools: false,
+            signal: agentAbortController.signal,
+            onTextDelta: (piece, full) => {
+              if (!wrapRef) wrapRef = beginStreamMsg("ai");
+              streamDelta(wrapRef, collapseDoubledWords(full));
+            },
+          });
+          endStreamMsg(wrapRef);
+          const wrapText = collapseDoubledWords((wrap && wrap.text) || "").trim();
+          if (wrapText) {
+            if (!wrapRef) appendMsg(wrapText, "ai");
+            agentHistory.push({ role: "assistant", content: wrapText });
+          }
+        } catch (_) {}
       }
       if (typeof runVibePostAgent === "function") {
         const retry = await runVibePostAgent({ content: content, step: step });

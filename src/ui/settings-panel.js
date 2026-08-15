@@ -18,6 +18,13 @@ function openSettings() {
     box.classList.add("open");
     box.style.display = "flex";
     box.style.zIndex = "10000";
+    box.style.visibility = "visible";
+    box.style.opacity = "1";
+    try {
+      if (typeof goarMotion !== "undefined" && goarMotion.sheetIn) {
+        goarMotion.sheetIn(null, box);
+      }
+    } catch (_) {}
   }
   loadModelsFromApi({ selected: settingsSnapshot().apiModel }).catch(() => {});
   const btn = document.getElementById("refreshModels");
@@ -32,11 +39,20 @@ function openSettings() {
 }
 function closeSettings() {
   const box = document.getElementById("settings");
-  if (box) {
-    box.classList.remove("open");
-    box.style.display = "";
-  }
-  try { term && term.focus(); } catch (_) {}
+  const hide = () => {
+    if (box) {
+      box.classList.remove("open");
+      box.style.display = "";
+    }
+    try { term && term.focus(); } catch (_) {}
+  };
+  try {
+    if (box && typeof goarMotion !== "undefined" && goarMotion.sheetOut) {
+      goarMotion.sheetOut(box.querySelector(".sheet"), box, hide);
+      return;
+    }
+  } catch (_) {}
+  hide();
 }
 
 
@@ -55,3 +71,12 @@ const _B64_LUT = (() => {
   t[61] = 0;
   return t;
 })();
+
+document.addEventListener("goar:open-settings", function (e) {
+  try {
+    if (typeof openSettings === "function") {
+      openSettings();
+      if (e && e.preventDefault) e.preventDefault();
+    }
+  } catch (_) {}
+});

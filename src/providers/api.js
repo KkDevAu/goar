@@ -97,7 +97,7 @@ const DEFAULTS = {
   apiKey: "",
   customDns: "",
   temperature: 0.2,
-  maxTokens: 8192,
+  maxTokens: 1536,
 };
 
 /** Live DOM map — never snapshot nulls from missing design IDs */

@@ -168,6 +168,15 @@ let CORE_AGENT_TOOLS = [
     } }
   }},
   { type: "function", function: {
+    name: "scratch",
+    description: "Session scratchpad at /workspace/.scratch. op=write|read|list|clear. Notes/drafts/probes — not product files.",
+    parameters: { type: "object", properties: {
+      op: { type: "string" },
+      name: { type: "string" },
+      content: { type: "string" }
+    } }
+  }},
+  { type: "function", function: {
     name: "py_check",
     description: "Byte-compile check a Python file (optional import smoke). Faster than full run for syntax mistakes.",
     parameters: { type: "object", properties: {
@@ -352,65 +361,132 @@ function rebuildPysecFnMaps() {
   } catch (_) {}
 }
 
-/**
- * Category surface only (~12 tools) — never expand 141 pysec schemas.
- * Core implementations remain in CORE_AGENT_TOOLS for internal dispatch docs;
- * the model only sees buildCategoryAgentTools().
- */
+/** What the model sees — Vibe/OpenAI: few first-class tools, short schemas. */
+const GOAR_API_TOOLS = [
+  { type: "function", function: {
+    name: "bash",
+    description: "Run a shell command in Alpine /workspace.",
+    parameters: { type: "object", properties: {
+      command: { type: "string" },
+      timeout_ms: { type: "number" }
+    }, required: ["command"] }
+  }},
+  { type: "function", function: {
+    name: "python_exec",
+    description: "Run Python 3 in Alpine. Pass code or path.",
+    parameters: { type: "object", properties: {
+      code: { type: "string" },
+      path: { type: "string" },
+      args: { type: "string" }
+    } }
+  }},
+  { type: "function", function: {
+    name: "write_file",
+    description: "Write the entire file once. Path + full content.",
+    parameters: { type: "object", properties: {
+      path: { type: "string" },
+      content: { type: "string" }
+    }, required: ["path", "content"] }
+  }},
+  { type: "function", function: {
+    name: "read_file",
+    description: "Read a file from Alpine.",
+    parameters: { type: "object", properties: {
+      path: { type: "string" },
+      max_bytes: { type: "number" }
+    }, required: ["path"] }
+  }},
+  { type: "function", function: {
+    name: "edit_file",
+    description: "Replace old_string with new_string in a file.",
+    parameters: { type: "object", properties: {
+      path: { type: "string" },
+      old_string: { type: "string" },
+      new_string: { type: "string" },
+      replace_all: { type: "boolean" }
+    }, required: ["path", "old_string", "new_string"] }
+  }},
+  { type: "function", function: {
+    name: "grep",
+    description: "Search file contents (regex) under a path.",
+    parameters: { type: "object", properties: {
+      pattern: { type: "string" },
+      path: { type: "string" }
+    }, required: ["pattern"] }
+  }},
+  { type: "function", function: {
+    name: "workspace_tree",
+    description: "List /workspace (or path) as a tree.",
+    parameters: { type: "object", properties: {
+      path: { type: "string" },
+      depth: { type: "number" }
+    } }
+  }},
+  { type: "function", function: {
+    name: "web_fetch",
+    description: "Fetch a URL and return text.",
+    parameters: { type: "object", properties: {
+      url: { type: "string" }
+    }, required: ["url"] }
+  }},
+  { type: "function", function: {
+    name: "browse",
+    description: "Open a URL in the shared Firefox and fetch it.",
+    parameters: { type: "object", properties: {
+      url: { type: "string" }
+    }, required: ["url"] }
+  }},
+  { type: "function", function: {
+    name: "pysec",
+    description: "Run a kit tool. tool_id like hash.digest or httpx.probe plus kwargs.",
+    parameters: { type: "object", properties: {
+      tool_id: { type: "string" },
+      kwargs: { type: "object" }
+    }, required: ["tool_id"] }
+  }},
+  { type: "function", function: {
+    name: "scratch",
+    description: "Session pad. op=write|read|list|clear. name + content.",
+    parameters: { type: "object", properties: {
+      op: { type: "string" },
+      name: { type: "string" },
+      content: { type: "string" }
+    } }
+  }},
+  { type: "function", function: {
+    name: "todo",
+    description: "Checklist. action=set|add|done|list|clear.",
+    parameters: { type: "object", properties: {
+      action: { type: "string" },
+      items: { type: "string" },
+      item: { type: "string" }
+    }, required: ["action"] }
+  }},
+  { type: "function", function: {
+    name: "complete_task",
+    description: "Finish with a short summary.",
+    parameters: { type: "object", properties: {
+      summary: { type: "string" }
+    }, required: ["summary"] }
+  }},
+];
+
 function buildFullAgentTools() {
   rebuildPysecFnMaps();
-  let cats = [];
-  try {
-    const _bcat =
-      typeof buildCategoryAgentTools === "function"
-        ? buildCategoryAgentTools
-        : typeof window !== "undefined" && typeof window.buildCategoryAgentTools === "function"
-          ? window.buildCategoryAgentTools
-          : null;
-    if (_bcat) {
-      cats = _bcat() || [];
-    }
-  } catch (e) {
-    console.warn("[goar] buildCategoryAgentTools", e);
-  }
-  // Fallback minimal if categories failed to load
-  if (!cats.length) {
-    cats = [
-      {
-        type: "function",
-        function: {
-          name: "pysec",
-          description: "Run pysec tool_id with kwargs",
-          parameters: {
-            type: "object",
-            properties: {
-              tool_id: { type: "string" },
-              kwargs: { type: "object" },
-            },
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "guest",
-          description: "Guest shell/fs: action=bash|write_file|read_file|python_exec|…",
-          parameters: {
-            type: "object",
-            properties: { action: { type: "string" }, command: { type: "string" }, path: { type: "string" }, content: { type: "string" } },
-            required: ["action"],
-          },
-        },
-      },
-    ];
-  }
+  const api = Array.isArray(GOAR_API_TOOLS) ? GOAR_API_TOOLS.slice() : [];
   let dyn = [];
   try {
     if (typeof buildDynamicAgentTools === "function") dyn = buildDynamicAgentTools() || [];
   } catch (_) {}
-  // Dynamic create_tool tools append but hard-cap under 128
-  const MAX = 120;
-  const out = cats.concat(dyn).slice(0, MAX);
+  const seen = new Set();
+  const out = [];
+  for (const t of api.concat(dyn)) {
+    const n = t && t.function && t.function.name;
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(t);
+    if (out.length >= 24) break;
+  }
   return out;
 }
 

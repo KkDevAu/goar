@@ -27,12 +27,11 @@ function initTerm() {
   try { fitAddon.fit(); } catch (_) {}
   // xterm → serial: Linux line discipline wants LF; map CR→LF
   term.onData((data) => {
-    if (!emulator) return;
+    const emu = emulator || window.__emulator;
+    const send = window.__serialSend || (emu && function (s) { emu.serial0_send(s); });
+    if (!send) return;
     try {
-      // xterm sends \r on Enter. Linux TTY wants CR (ICRNL → NL).
-      // Map LF→CR only; keep CR as CR so Enter works.
-      let fixed = data.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
-      emulator.serial0_send(fixed);
+      send(String(data).replace(/\r\n/g, "\r").replace(/\n/g, "\r"));
     } catch (_) {}
   });
   // Push geometry to guest TTY when xterm resizes
@@ -50,15 +49,8 @@ function initTerm() {
     } catch (_) {}
   };
   window.__pushTtySize = pushTtySize;
-  const focusTerm = () => {
-    try { term.focus(); } catch (_) {}
-    try {
-      const ta = el.host.querySelector(".xterm-helper-textarea");
-      if (ta) ta.focus();
-    } catch (_) {}
-  };
-  const host = (typeof el !== "undefined" && el.host) || termMount.parentElement || termMount;
-  if (host && host.addEventListener) host.addEventListener("pointerdown", focusTerm);
+  const host = document.getElementById("term-stage") || termMount;
+  if (host && host.addEventListener) host.addEventListener("pointerdown", focusLiveTerm);
   window.addEventListener("resize", () => {
     try { fitAddon.fit(); } catch (_) {}
     /* no stty spam */
@@ -71,6 +63,62 @@ function initTerm() {
   }
   // expose for post-boot
   window.__pushTtySize = pushTtySize;
+}
+
+function focusLiveTerm() {
+  try { if (term && term.focus) term.focus(); } catch (_) {}
+  try {
+    const root = document.getElementById("term-stage") || document.getElementById("terminal");
+    const ta = root && root.querySelector(".xterm-helper-textarea");
+    if (ta) {
+      ta.style.left = "0";
+      ta.style.top = "0";
+      ta.style.width = "100%";
+      ta.style.height = "100%";
+      ta.style.opacity = "0";
+      ta.style.zIndex = "8";
+      ta.removeAttribute("disabled");
+      ta.focus();
+    }
+  } catch (_) {}
+}
+
+function attachTermView() {
+  const stage = document.getElementById("term-stage");
+  const termEl = document.getElementById("terminal");
+  const tab = document.getElementById("term-tab");
+  if (tab) {
+    tab.style.transform = "none";
+    tab.style.filter = "none";
+    tab.style.opacity = "1";
+    tab.style.pointerEvents = "auto";
+  }
+  if (stage && termEl && termEl.parentElement !== stage) stage.appendChild(termEl);
+  if (termEl) {
+    termEl.classList.add("live");
+    termEl.style.pointerEvents = "auto";
+  }
+  const fit = () => {
+    try { if (fitAddon && fitAddon.fit) fitAddon.fit(); } catch (_) {}
+    focusLiveTerm();
+  };
+  fit();
+  requestAnimationFrame(() => {
+    fit();
+    requestAnimationFrame(fit);
+  });
+  if (stage && !stage._goarFocus) {
+    stage._goarFocus = true;
+    stage.addEventListener("pointerdown", () => focusLiveTerm());
+  }
+  try {
+    const up = (typeof envReady !== "undefined" && envReady) || window.__GOAR_ENV_READY || window.__emulator;
+    if (up && typeof markTermReady === "function") markTermReady();
+    if (up && typeof fixGuestTty === "function") {
+      window.__ttyFixed = false;
+      fixGuestTty();
+    }
+  } catch (_) {}
 }
 
 

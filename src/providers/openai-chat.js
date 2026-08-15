@@ -1,13 +1,20 @@
 function sanitizeMessagesForApi(messages) {
+  const s = typeof settingsSnapshot === "function" ? settingsSnapshot() : {};
+  const allow = typeof providerAllowsThinkingBlocks === "function" ? providerAllowsThinkingBlocks(s) : true;
   return (messages || []).map(function (m) {
     if (!m || typeof m !== "object") return { role: "user", content: String(m || "") };
+    if (m.role === "assistant" && typeof convertAssistantForApi === "function") {
+      return convertAssistantForApi(m, allow);
+    }
     const out = { role: m.role || "user" };
     if (m.content != null) out.content = m.content;
     if (Array.isArray(m.tool_calls) && m.tool_calls.length) out.tool_calls = m.tool_calls;
     if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
     if (m.name && m.role === "tool") out.name = m.name;
     return out;
-  }).filter(function (m) { return m.role && (m.content != null || m.tool_calls || m.tool_call_id); });
+  }).filter(function (m) {
+    return m.role && (m.content != null || m.tool_calls || m.tool_call_id);
+  });
 }
 
 function slimToolsForApi(tools) {
@@ -25,7 +32,7 @@ function slimToolsForApi(tools) {
       type: "function",
       function: {
         name: fn.name,
-        description: String(fn.description || "").slice(0, 90),
+        description: String(fn.description || "").slice(0, 160),
         parameters: { type: "object", properties: slim, required: params.required || [] },
       },
     };

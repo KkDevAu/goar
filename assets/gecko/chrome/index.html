@@ -16,13 +16,27 @@
     <style>
       .top-nav, .startup-console, .project-copy, .branding-note, .advanced, .powered-badge { display: none !important; }
       #splash { background: #0c0c0d; color: #f4f4f5; }
-      #splash.done { display: none !important; }
-      #screen.ready { display: block !important; width: 100vw !important; height: 100vh !important; }
+      #splash.done, #splash.ready { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+      #screen, #screen.ready { display: block !important; position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2; }
       .splash-title { color: #f4f4f5 !important; font-size: 1rem !important; }
       .start-btn { min-height: 44px; }
     </style>
   </head>
   <body>
+    <script>
+    (function () {
+      try {
+        var cur = {};
+        try { cur = JSON.parse(localStorage.getItem("chrome-demo-opts") || "{}") || {}; } catch (_) {}
+        if (!cur.wisp || !/^wss?:\/\//i.test(String(cur.wisp))) {
+          cur.wisp = "wss://wisp.mercurywork.shop/";
+        }
+        if (typeof cur.gpu !== "boolean") cur.gpu = false;
+        if (typeof cur.jit !== "boolean") cur.jit = false;
+        localStorage.setItem("chrome-demo-opts", JSON.stringify(cur));
+      } catch (_) {}
+    })();
+    </script>
     <section id="splash" aria-live="polite">
       <header class="top-nav">
         <div class="nav-left">
@@ -196,11 +210,16 @@
       try { localStorage.setItem("libxul-demo-url", home); } catch (_) {}
       const tick = setInterval(function () {
         const b = document.getElementById("start-btn");
-        if (!b) return;
-        const card = document.getElementById("stage-card");
-        const ready = card && card.getAttribute("data-phase") === "ready";
-        if (ready || (b.offsetParent && !b.disabled)) {
-          b.click();
+        if (b && (b.offsetParent && !b.disabled)) b.click();
+        if (typeof window.geckoLoad === "function") {
+          const splash = document.getElementById("splash");
+          if (splash) splash.remove();
+          const screen = document.getElementById("screen");
+          if (screen) {
+            screen.classList.add("ready");
+            screen.style.imageRendering = "auto";
+          }
+          try { window.geckoLoad(home); } catch (_) {}
           clearInterval(tick);
         }
       }, 350);

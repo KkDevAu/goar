@@ -3,43 +3,44 @@ const GOAR_BIN = "https://raw.githubusercontent.com/KkDevAu/goar/refs/heads/main
 
 function goarAssetUrl(rel) {
   const p = String(rel || "").replace(/^\.\//, "").replace(/^\//, "");
-  if (/\.(gz|zst|bin)$/i.test(p) || /frozen|rootfs|vmlinuz|gecko\.wasm/.test(p)) {
+  if (/\.(gz|zst|bin|wasm|cpio|mjs)$/i.test(p) || /frozen|rootfs|vmlinuz|gecko\.wasm|libv86|pyodide/i.test(p)) {
     return GOAR_BIN + p;
   }
   return GOAR_REMOTE + p;
 }
 
 const CACHE_NAME = "goar-assets";
-const GOAR_LOGO = goarAssetUrl("assets/brand/g.png");
+const GOAR_LOGO = GOAR_REMOTE + "assets/brand/g.png";
 
-const LOCAL_ASSETS = {
-  wasm: goarAssetUrl("assets/v86.wasm"),
-  bzimage: goarAssetUrl("assets/vmlinuz-lts"),
-  initrd: goarAssetUrl("assets/rootfs-slim.cpio.gz"),
-  lib: goarAssetUrl("assets/libv86.mjs"),
-  seabios: goarAssetUrl("assets/seabios.bin"),
-  vgabios: goarAssetUrl("assets/vgabios.bin"),
-  libcurl: goarAssetUrl("assets/net/libcurl.wasm"),
-  libcurlJs: goarAssetUrl("assets/net/libcurl.mjs"),
-  gecko: goarAssetUrl("assets/gecko/gecko.wasm.zst"),
-  geckoJs: goarAssetUrl("assets/gecko/gecko.js"),
-  geckoChrome: goarAssetUrl("assets/gecko/chrome/index.html"),
-  pyodide: goarAssetUrl("assets/pyodide/"),
-  frozen: goarAssetUrl("assets/frozen.bin.gz"),
+const HEAVY = {
+  wasm: GOAR_BIN + "assets/v86.wasm",
+  lib: GOAR_BIN + "assets/libv86.mjs",
+  bzimage: GOAR_BIN + "assets/vmlinuz-lts",
+  initrd: GOAR_BIN + "assets/rootfs-slim.cpio.gz",
+  seabios: GOAR_BIN + "assets/seabios.bin",
+  vgabios: GOAR_BIN + "assets/vgabios.bin",
+  frozen: GOAR_BIN + "assets/frozen.bin.gz",
+  gecko: "./assets/gecko/gecko.wasm.zst",
+  geckoJs: "./assets/gecko/gecko.js",
+  libcurl: GOAR_BIN + "assets/net/libcurl.wasm",
+  libcurlJs: GOAR_REMOTE + "assets/net/libcurl.mjs",
+  pyodide: "https://cdn.jsdelivr.net/pyodide/v0.27.0/full/",
   logo: GOAR_LOGO,
 };
 
+const LOCAL_ASSETS = HEAVY;
 const ASSETS = {
-  wasm: [LOCAL_ASSETS.wasm],
-  lib: [LOCAL_ASSETS.lib],
-  bzimage: [LOCAL_ASSETS.bzimage],
-  initrd: [LOCAL_ASSETS.initrd],
+  wasm: [HEAVY.wasm],
+  lib: [HEAVY.lib],
+  bzimage: [HEAVY.bzimage],
+  initrd: [HEAVY.initrd],
 };
 
 try {
   window.GOAR_REMOTE = GOAR_REMOTE;
   window.GOAR_BIN = GOAR_BIN;
   window.GOAR_LOGO = GOAR_LOGO;
+  window.HEAVY = HEAVY;
   window.LOCAL_ASSETS = LOCAL_ASSETS;
   window.ASSETS = ASSETS;
   window.CACHE_NAME = CACHE_NAME;

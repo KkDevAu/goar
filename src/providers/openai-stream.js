@@ -15,19 +15,18 @@ async function openaiChatStream({
   if ((getProvider(provider)?.requiresApiKey) && !(s.apiKey || "").trim() && !getProvider(provider)?.supportsOptionalApiKey) {
     throw new Error("No API key — open Settings and paste your key.");
   }
-  const body = {
-    model,
-    messages: (typeof sanitizeMessagesForApi === "function" ? sanitizeMessagesForApi(messages) : messages),
-    temperature: Number(s.temperature != null ? s.temperature : DEFAULTS.temperature) || 0.3,
-    max_tokens: Number(s.maxTokens != null ? s.maxTokens : DEFAULTS.maxTokens) || 8192,
-    stream: true,
-  };
-  if (includeTools && tools && tools.length) {
-    body.tools = tools;
+  const body = (typeof resolveChatBody === "function")
+    ? resolveChatBody(s, messages, tools, true, includeTools)
+    : {
+        model,
+        messages: (typeof sanitizeMessagesForApi === "function" ? sanitizeMessagesForApi(messages) : messages),
+        temperature: Number(s.temperature != null ? s.temperature : DEFAULTS.temperature) || 0.2,
+        max_tokens: (typeof resolveMaxTokens === "function" ? resolveMaxTokens(s) : 1536),
+        stream: true,
+      };
+  if (body && includeTools && tools && tools.length && !body.tools && typeof slimToolsForApi === "function") {
+    body.tools = slimToolsForApi(tools);
     body.tool_choice = "auto";
-    if (/openrouter|openai|groq|nvidia|together|deepseek|fireworks|deepinfra/i.test(base + provider)) {
-      body.parallel_tool_calls = false;
-    }
   }
   const headers = authHeaders(s.apiKey, base, provider);
   headers["Accept"] = "text/event-stream";
@@ -112,56 +111,33 @@ async function openaiChatStream({
         if (choice.finish_reason) finish = choice.finish_reason;
         // Some providers put full message mid-stream
         const delta = choice.delta || choice.message || {};
-        // text (string or content-array parts — OpenAI compatible)
-        let piece = null;
-        if (typeof delta.content === "string") piece = delta.content;
-        else if (Array.isArray(delta.content)) {
-          piece = delta.content.map((p) => {
-            if (typeof p === "string") return p;
-            if (p && typeof p.text === "string") return p.text;
-            if (p && p.type === "text" && typeof p.text === "string") return p.text;
-            return "";
-          }).join("");
-        } else if (typeof choice.text === "string") piece = choice.text;
+        const parsed = typeof extractReasoningFromDelta === "function"
+          ? extractReasoningFromDelta(delta)
+          : { text: typeof delta.content === "string" ? delta.content : "", thinking: "" };
+        let piece = parsed.text;
+        if (!piece && typeof choice.text === "string") piece = choice.text;
         if (piece) {
-          // cumulative snapshot vs token delta
           if (text && piece.startsWith(text) && piece.length > text.length) {
             text = piece;
           } else if (text && text.startsWith(piece) && piece.length < text.length) {
-            // ignore
+            // ignore snapshot shrink
           } else {
             text += piece;
           }
           text = collapseDoubledWords(text);
           if (onTextDelta) onTextDelta(piece, text);
         }
-        // thinking / reasoning — take FIRST non-empty field only (avoids TheThe doubles)
-        {
-          let th = "";
-          for (const key of ["reasoning_content", "thinking", "reasoning", "reasoning_text"]) {
-            let v = delta[key];
-            if (v && typeof v === "object") {
-              if (typeof v.content === "string") v = v.content;
-              else if (typeof v.text === "string") v = v.text;
-              else v = "";
-            }
-            if (typeof v === "string" && v.length) { th = v; break; }
+        if (parsed.thinking) {
+          const th = parsed.thinking;
+          if (thinking && th.startsWith(thinking)) {
+            thinking = th;
+          } else if (thinking && thinking.startsWith(th)) {
+            // ignore
+          } else {
+            thinking += th;
           }
-          if (!th && Array.isArray(delta.reasoning_details) && delta.reasoning_details.length) {
-            th = delta.reasoning_details.map((rd) => (rd && (rd.text || rd.content || rd.summary)) || "").join("");
-          }
-          if (th) {
-            // If provider sends cumulative full thinking, replace; if delta, append
-            if (thinking && th.startsWith(thinking)) {
-              thinking = th;
-            } else if (thinking && thinking.startsWith(th)) {
-              // ignore smaller snapshot
-            } else {
-              thinking += th;
-            }
-            thinking = collapseDoubledWords(thinking);
-            if (onThinkingDelta) onThinkingDelta(th, thinking);
-          }
+          thinking = collapseDoubledWords(thinking);
+          if (onThinkingDelta) onThinkingDelta(th, thinking);
         }
         // tool_calls streamed
         const tcs = delta.tool_calls;
@@ -208,13 +184,23 @@ async function openaiChatStream({
 
 function normalizeChatResultFromJson(data, onTextDelta, onThinkingDelta) {
   const msg = data?.choices?.[0]?.message || {};
-  const text = msg.content || "";
-  let thinking =
-    msg.reasoning_content ||
-    msg.thinking ||
-    (typeof msg.reasoning === "string" ? msg.reasoning : null) ||
-    (msg.reasoning && msg.reasoning.content) ||
-    "";
+  let text = "";
+  let thinking = "";
+  if (typeof parseContentBlocks === "function") {
+    const parsed = parseContentBlocks(msg.content);
+    text = parsed.text || (typeof msg.content === "string" ? msg.content : "");
+    thinking = parsed.thinking || "";
+  } else {
+    text = typeof msg.content === "string" ? msg.content : "";
+  }
+  if (!thinking) {
+    thinking =
+      msg.reasoning_content ||
+      msg.thinking ||
+      (typeof msg.reasoning === "string" ? msg.reasoning : "") ||
+      (msg.reasoning && msg.reasoning.content) ||
+      "";
+  }
   if (thinking && onThinkingDelta) onThinkingDelta(thinking, thinking);
   if (text && onTextDelta) onTextDelta(text, text);
   const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];

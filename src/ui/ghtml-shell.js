@@ -89,10 +89,10 @@
   /* ---------- views ---------- */
   function goarShowView(view) {
     document.body.classList.remove("split-computer", "files-only", "files-ide", "view-computer", "view-files", "view-term");
-    $("browser-tab")?.classList.remove("open", "view-active");
-    $("files-sheet-overlay")?.classList.remove("open", "view-active");
-    $("ide-shell")?.classList.remove("open", "view-active");
-    $("term-tab")?.classList.remove("open", "view-active");
+    $("browser-tab")?.classList.remove("open", "view-active", "active");
+    $("files-sheet-overlay")?.classList.remove("open", "view-active", "active");
+    $("ide-shell")?.classList.remove("open", "view-active", "active");
+    $("term-tab")?.classList.remove("open", "view-active", "active");
     $("view-skills")?.classList.remove("active");
     $("chat")?.classList.remove("active");
     if ($("browser-tab")) $("browser-tab").setAttribute("aria-hidden", "true");
@@ -107,30 +107,37 @@
 
     if (view === "chat") {
       $("chat")?.classList.add("active");
+      try { if (typeof goarMotion !== "undefined") goarMotion.panelIn($("chat")); } catch (_) {}
     } else if (view === "computer") {
       document.body.classList.add("view-computer");
-      $("browser-tab")?.classList.add("open", "view-active");
+      $("browser-tab")?.classList.add("open", "view-active", "active");
       if ($("browser-tab")) $("browser-tab").setAttribute("aria-hidden", "false");
+      try { if (typeof goarMotion !== "undefined") goarMotion.panelIn($("browser-tab")); } catch (_) {}
       openComputer();
     } else if (view === "term") {
       document.body.classList.add("view-term");
       const tab = $("term-tab");
       if (tab) {
-        tab.classList.add("open", "view-active");
+        tab.classList.add("open", "view-active", "active");
         tab.setAttribute("aria-hidden", "false");
+      }
+      if (typeof attachTermView === "function") attachTermView();
+      else {
         const stage = $("term-stage");
         const termEl = $("terminal");
         if (stage && termEl && termEl.parentElement !== stage) stage.appendChild(termEl);
+        termEl?.classList.add("live");
+        try {
+          if (typeof fitAddon !== "undefined" && fitAddon && fitAddon.fit) fitAddon.fit();
+          if (typeof term !== "undefined" && term && term.focus) term.focus();
+        } catch (_) {}
       }
-      try {
-        if (typeof fitAddon !== "undefined" && fitAddon && fitAddon.fit) fitAddon.fit();
-        if (typeof term !== "undefined" && term && term.focus) term.focus();
-      } catch (_) {}
     } else if (view === "ide") {
       document.body.classList.add("view-files", "files-ide");
       $("files-sheet-overlay")?.classList.add("open", "view-active");
-      $("ide-shell")?.classList.add("open", "view-active");
+      $("ide-shell")?.classList.add("open", "view-active", "active");
       if ($("files-sheet-overlay")) $("files-sheet-overlay").setAttribute("aria-hidden", "false");
+      try { if (typeof goarMotion !== "undefined") goarMotion.panelIn($("ide-shell") || $("files-sheet-overlay")); } catch (_) {}
       loadFileList();
     } else if (view === "skills") {
       $("view-skills")?.classList.add("active");
@@ -145,7 +152,10 @@
     const open = force == null ? !ov.classList.contains("open") : !!force;
     ov.classList.toggle("open", open);
     ov.setAttribute("aria-hidden", open ? "false" : "true");
-    if (open) renderHistory();
+    if (open) {
+      renderHistory();
+      try { if (typeof goarMotion !== "undefined") goarMotion.historyIn(); } catch (_) {}
+    }
   }
 
   function renderHistory() {
@@ -200,7 +210,9 @@
     const open = force == null ? !ov.classList.contains("open") : !!force;
     ov.classList.toggle("open", open);
     ov.setAttribute("aria-hidden", open ? "false" : "true");
-
+    if (open) {
+      try { if (typeof goarMotion !== "undefined") goarMotion.drawerIn(); } catch (_) {}
+    }
   }
 
   function newSession() {
@@ -238,7 +250,7 @@
     if (typeof ensureGecko === "function") {
       try {
         const r = await ensureGecko({
-          mode: window.GOAR_GECKO_MODE || "embed",
+          mode: "embed",
           url: window.GOAR_GECKO_HOME || "https://duckduckgo.com/",
           show: true,
         });

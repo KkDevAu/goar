@@ -237,12 +237,12 @@ async function ensurePysecWorker() {
     const files = await inflatePysecPackage();
     // load Pyodide (CDN runtime only — toolkit is fully embedded)
     // Prefer packaged WASM under ./assets/pyodide (offline), fall back to CDN
-    let indexURL = (typeof PYSEC_PYODIDE_LOCAL !== "undefined" ? PYSEC_PYODIDE_LOCAL : (typeof GOAR_REMOTE === "string" ? GOAR_REMOTE + "assets/pyodide/" : "https://cdn.jsdelivr.net/gh/KkDevAu/goar@main/assets/pyodide/"));
+    let indexURL = (typeof HEAVY !== "undefined" && HEAVY.pyodide)
+      ? HEAVY.pyodide
+      : (typeof PYSEC_PYODIDE_LOCAL !== "undefined" ? PYSEC_PYODIDE_LOCAL : "https://cdn.jsdelivr.net/pyodide/v0.27.0/full/");
     const base = (typeof document !== "undefined" && document.baseURI) || location.href;
     indexURL = new URL(indexURL, base).href;
     if (!indexURL.endsWith("/")) indexURL += "/";
-    const probe = await fetch(indexURL + "pyodide.asm.wasm", { method: "HEAD", cache: "force-cache" });
-    if (!probe.ok) throw new Error("pyodide missing at " + indexURL + " (" + probe.status + ")");
     const mod = await import(indexURL + "pyodide.mjs");
     __pyodide = await mod.loadPyodide({ indexURL });
     // Polyfill hashlib.pbkdf2_hmac when missing (needed by cipher tools)

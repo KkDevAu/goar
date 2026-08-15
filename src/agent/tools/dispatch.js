@@ -69,34 +69,21 @@ async function runAgentTool(name, args) {
     case "browse": {
       const url = args && args.url;
       if (!url) return JSON.stringify({ ok: false, error: "url required" });
-      let gecko = null;
-      let fetchOut = null;
+      const cap = (p, ms) => Promise.race([
+        Promise.resolve(p).catch((e) => ({ ok: false, error: String(e && e.message ? e.message : e) })),
+        new Promise((res) => setTimeout(() => res({ ok: false, error: "timeout" }), ms)),
+      ]);
       try {
         if (typeof ensureGecko === "function") {
-          await ensureGecko({ mode: args.mode || "embed", show: args.show !== false, url });
-        }
-        if (typeof geckoLoad === "function") gecko = await geckoLoad(url);
-      } catch (e) {
-        gecko = { ok: false, error: String(e && e.message ? e.message : e) };
-      }
-      try {
-        fetchOut = await toolWebFetch({ url, timeout_ms: args.timeout_ms });
-        if (typeof fetchOut === "string" && fetchOut.length > 4000) {
-          fetchOut = fetchOut.slice(0, 4000) + "…";
-        }
-      } catch (e) {
-        fetchOut = "fetch error: " + (e && e.message ? e.message : e);
-      }
-      let page = null;
-      try {
-        if (typeof pageSnapshot === "function") page = await pageSnapshot({ max: 1800 });
-      } catch (_) {}
-      try {
-        if (typeof goarKvSet === "function") {
-          goarKvSet("last_browse", JSON.stringify({ url, ts: Date.now() }), { ns: "session" });
+          cap(ensureGecko({ mode: args.mode || "embed", show: args.show !== false, url }), 4000);
         }
       } catch (_) {}
-      return JSON.stringify({ ok: true, url, gecko, page, fetch: fetchOut }, null, 2);
+      const geckoP = typeof geckoLoad === "function" ? cap(geckoLoad(url), 7000) : Promise.resolve(null);
+      const fetchP = cap(toolWebFetch({ url, timeout_ms: 7000 }), 8000);
+      const [gecko, fetchOut] = await Promise.all([geckoP, fetchP]);
+      let text = fetchOut;
+      if (typeof text === "string" && text.length > 4000) text = text.slice(0, 4000) + "…";
+      return JSON.stringify({ ok: true, url, gecko, fetch: text }, null, 2);
     }
     case "http_request": return toolHttp(args);
     case "env_info": return toolEnvInfo(args);
@@ -108,6 +95,7 @@ async function runAgentTool(name, args) {
     case "guest_http": return toolGuestHttp(args);
     case "kit_status": return toolKitStatus(args);
     case "workspace_tree": return toolWorkspaceTree(args);
+    case "scratch": return typeof toolScratch === "function" ? toolScratch(args) : "error: scratch missing";
     case "py_check": return toolPyCheck(args);
     case "net_diag": return toolNetDiag(args);
     case "todo": return toolTodo(args);

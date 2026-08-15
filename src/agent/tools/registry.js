@@ -12,10 +12,10 @@ function refreshAgentTools() {
       return AGENT_TOOLS.slice();
     };
     window.__GOAR_TOOL_SELECT = {
-      mode: "category",
+      mode: "vibe",
       api: AGENT_TOOLS.length,
       catalog: typeof PYSEC_TOOL_COUNT === "number" ? PYSEC_TOOL_COUNT : 141,
-      groups: ["guest", "net", "browser", "kv", "mind", "kit", "pysec_*"],
+      groups: ["bash", "write_file", "pysec", "browse"],
       max: 128,
       hits: 0,
     };

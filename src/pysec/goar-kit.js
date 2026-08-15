@@ -31,11 +31,16 @@ async function kitRun(subcmd, extraArgs, timeoutMs) {
 
 async function toolKitStatus() { return kitRun("status", [], 60000); }
 async function toolWorkspaceTree(args) {
-  const a = [];
-  if (args.path) a.push("--path", args.path);
-  if (args.depth != null) a.push("--depth", String(args.depth));
-  if (args.limit != null) a.push("--limit", String(args.limit));
-  return kitRun("tree", a, 60000);
+  const path = String((args && args.path) || "/workspace");
+  const depth = Math.max(1, Math.min(6, Number((args && args.depth) || 3)));
+  const limit = Math.max(20, Math.min(400, Number((args && args.limit) || 220)));
+  if (typeof guestExec !== "function") return "error: guest down";
+  const r = await guestExec(
+    "find " + path.replace(/'/g, "") + " -maxdepth " + depth + " 2>/dev/null | head -n " + limit,
+    12000
+  );
+  const out = (r && r.output != null) ? r.output : String(r || "");
+  return out || "(empty)";
 }
 async function toolPyCheck(args) {
   const a = ["--path", args.path || ""];

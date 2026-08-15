@@ -46,11 +46,9 @@ const memPlan = planMemoryBudget();
   let lastErr = null;
   for (const mem of mems) {
     try {
-      emulator = new V86({
+      const opts = {
         wasm_path: buffers.wasmUrl,
-        initial_state: window.__GOAR_INITIAL_STATE || undefined,
         memory_size: mem,
-        // leaner: less background work
         disable_speech: true,
         disable_kbd: false,
         vga_memory_size: 2 * 1024 * 1024,
@@ -66,7 +64,12 @@ const memPlan = planMemoryBudget();
         disable_keyboard: true,
         disable_mouse: true,
         disable_speaker: true,
-      });
+      };
+      if (window.__GOAR_INITIAL_STATE) {
+        const st = window.__GOAR_INITIAL_STATE;
+        opts.initial_state = st.buffer ? st : { buffer: st };
+      }
+      emulator = new V86(opts);
       lastErr = null;
       break;
     } catch (e) { lastErr = e; }
@@ -109,9 +112,52 @@ const memPlan = planMemoryBudget();
   setTimeout(doneEnv, window.__GOAR_FROM_FREEZE ? 600 : 2500);
 }
 
-/** After guest sequence: toolkit then credentials gate → chat */
+function markTermReady() {
+  if (window.__GOAR_TERM_READY) return;
+  window.__GOAR_TERM_READY = true;
+  try {
+    if (term) {
+      term.write("\r\x1b[2K\x1b[90mready\x1b[0m\r\n");
+    }
+  } catch (_) {}
+  try {
+    if (emulator && emulator.serial0_send) emulator.serial0_send("\n");
+  } catch (_) {}
+  try {
+    if (typeof fitAddon !== "undefined" && fitAddon && fitAddon.fit) fitAddon.fit();
+  } catch (_) {}
+}
+
+function goarAutomate() {
+  if (window.__GOAR_AUTOMATED) return;
+  window.__GOAR_AUTOMATED = true;
+  try { if (typeof markTermReady === "function") markTermReady(); } catch (_) {}
+  try {
+    if (typeof fixGuestTty === "function") {
+      window.__ttyFixed = false;
+      fixGuestTty();
+    }
+  } catch (_) {}
+  try { if (typeof attachTermView === "function" && document.body.classList.contains("view-term")) attachTermView(); } catch (_) {}
+  Promise.resolve().then(async () => {
+    try { if (typeof ensurePysecWorker === "function") await ensurePysecWorker(); } catch (_) {}
+    try { if (typeof ensurePysecNetwork === "function") await ensurePysecNetwork(); } catch (_) {}
+    try { if (typeof ensureSystemPlanes === "function") await ensureSystemPlanes(); } catch (_) {}
+    try {
+      if (typeof ensureGecko === "function") {
+        await ensureGecko({
+          mode: "embed",
+          url: window.GOAR_GECKO_HOME || "https://duckduckgo.com/",
+          show: false,
+        });
+      }
+    } catch (_) {}
+  });
+}
+
 async function afterEnvReady() {
   bootItem("sandbox", "ok", "ok");
+  goarAutomate();
   bootItem("toolkit", "run", "…");
   Promise.resolve().then(async () => {
     try {
@@ -122,26 +168,26 @@ async function afterEnvReady() {
       bootItem("toolkit", "err", "retry");
     }
   });
-  Promise.resolve().then(async () => {
-    try {
-      if (typeof ensureGecko === "function") {
-        await ensureGecko({
-          mode: window.GOAR_GECKO_MODE || "embed",
-          url: window.GOAR_GECKO_HOME || "https://duckduckgo.com/",
-          show: false,
-        });
-      }
-    } catch (e) {
-      console.warn("[goar] gecko warm", e);
-    }
-  });
   bootItem("agent", "run", "…");
   setProgress(100, "Ready", "");
   try { pysecCatalogBody && pysecCatalogBody(); } catch (_) {}
   bootItem("agent", "ok", "ok");
-  setProgress(100, "Ready", geckoStatus && geckoStatus().ready ? "sandbox + browser live" : "");
-  await sleep(200);
-  showCredPhase();
+  try { if (typeof setProgress === "function") setProgress(92, "Browser", ""); } catch (_) {}
+  try {
+    if (typeof waitForGoarPlanes === "function") await waitForGoarPlanes(40000);
+  } catch (e) {
+    console.warn("[goar] wait browser", e);
+  }
+  setProgress(100, "Ready", "");
+  await sleep(120);
+  let keyed = false;
+  try {
+    const s = typeof settingsSnapshot === "function" ? settingsSnapshot() : {};
+    keyed = !!(s.apiKey && String(s.apiKey).trim() && s.apiModel);
+    if (!keyed && s.provider === "ollama") keyed = !!s.apiModel;
+  } catch (_) {}
+  if (keyed && typeof finishEnterChat === "function") finishEnterChat();
+  else showCredPhase();
 }
 
 
