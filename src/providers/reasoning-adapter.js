@@ -1,5 +1,5 @@
 /**
- * Vibe ReasoningAdapter — split thinking from text, echo it back.
+ * Reasoning adapter — split thinking from text, echo it back.
  * thinking is never a tool. Chat text is the only user-facing reply.
  */
 function parseContentBlocks(content) {

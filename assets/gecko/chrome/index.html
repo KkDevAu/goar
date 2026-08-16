@@ -17,7 +17,16 @@
       .top-nav, .startup-console, .project-copy, .branding-note, .advanced, .powered-badge { display: none !important; }
       #splash { background: #0c0c0d; color: #f4f4f5; }
       #splash.done, #splash.ready { display: none !important; visibility: hidden !important; pointer-events: none !important; }
-      #screen, #screen.ready { display: block !important; position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2; }
+      #screen, #screen.ready {
+        display: block !important;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 2;
+        image-rendering: auto;
+        background: #1c1b22;
+      }
       .splash-title { color: #f4f4f5 !important; font-size: 1rem !important; }
       .start-btn { min-height: 44px; }
     </style>
@@ -25,6 +34,35 @@
   <body>
     <script>
     (function () {
+      function hostSize() {
+        var w = 1100, h = 720;
+        try {
+          if (parent && parent !== window) {
+            var el = parent.document.getElementById("browser-frame-wrap") || parent.document.getElementById("geckoBody");
+            if (el) {
+              var r = el.getBoundingClientRect();
+              if (r.width >= 80 && r.height >= 80) { w = Math.floor(r.width); h = Math.floor(r.height); }
+              else if (parent.innerWidth) { w = Math.max(640, parent.innerWidth - 48); h = Math.max(400, parent.innerHeight); }
+            } else if (parent.innerWidth) {
+              w = Math.max(640, parent.innerWidth - 48);
+              h = Math.max(400, parent.innerHeight);
+            }
+          } else {
+            w = Math.max(640, window.innerWidth || 1100);
+            h = Math.max(400, window.innerHeight || 720);
+          }
+        } catch (_) {}
+        return { w: w, h: h };
+      }
+      try {
+        var sz = hostSize();
+        if ((window.innerWidth || 0) < 80) {
+          Object.defineProperty(window, "innerWidth", { configurable: true, get: function () { return hostSize().w; } });
+          Object.defineProperty(window, "innerHeight", { configurable: true, get: function () { return hostSize().h; } });
+        }
+        var c = document.getElementById("screen");
+        if (c) { c.width = sz.w; c.height = sz.h; }
+      } catch (_) {}
       try {
         var cur = {};
         try { cur = JSON.parse(localStorage.getItem("chrome-demo-opts") || "{}") || {}; } catch (_) {}

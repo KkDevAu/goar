@@ -1,6 +1,6 @@
 /**
- * Vibe-style system prompt: short markdown + live line.
- * Tools live in the API tools array — never listed here.
+ * Compact system prompt: operator core + live status line.
+ * Tools are in the API tools array — never listed here.
  */
 function buildVibeSystemPrompt() {
   const lines = [];

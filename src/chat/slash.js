@@ -21,9 +21,8 @@ async function handleSlash(raw) {
       "  /clearcache      wipe asset cache\n" +
       "  /clear           clear chat\n" +
       "  /todo · /plan · /stop · /reset\n" +
-      "  /models          live list from API\n" +
       "  /pysec-init      preload security toolkit\n" +
-      "  /tools           category tool map\n" +
+      "  /tools           tool map\n" +
       "  /status  /term  /bash  /py",
       "sys",
     );
@@ -32,11 +31,10 @@ async function handleSlash(raw) {
   if (c === "tools" || c === "toolmap" || c === "categories") {
     const blurb = typeof categoryKitBlurb === "function" ? categoryKitBlurb() : "";
     appendMsg(
-      "TOOL MAP (category surface — pick a toolbox, do not list forever)\n" +
+      "Tools\n" +
       blurb +
-      "\nPyodide kit: kit{action:micropip_install|create_tool|edit_tool|list_session_tools}\n" +
-      "Heavy work: guest{action:bash|python_exec|write_file}\n" +
-      "Menu → Direct agent lists each category for one-tap mission start.",
+      "\nKit: micropip, create_tool, list session tools\n" +
+      "Workspace: guest bash, python_exec, write_file",
       "sys",
     );
     return;
@@ -191,8 +189,10 @@ async function handleSlash(raw) {
     if (!arg) return appendMsg("usage: /py <python code>", "sys");
     appendMsg(arg, "user");
     try {
-      const r = await guestExec("python3 -c " + JSON.stringify(arg), 60000);
-      appendMsg("exit " + r.code + "\n" + r.output, "tool");
+      const r = typeof toolPython === "function"
+        ? await toolPython({ code: arg, timeout_ms: 60000 })
+        : await guestExec("python3 -c " + JSON.stringify(arg), 60000);
+      appendMsg(typeof r === "string" ? r : ("exit " + r.code + "\n" + r.output), "tool");
     } catch (e) { appendMsg(String(e.message || e), "err"); }
     return;
   }

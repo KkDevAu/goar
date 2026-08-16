@@ -1,5 +1,5 @@
 /**
- * Frontend port of mistral-vibe ConversationMiddleware (before_turn).
+ * Conversation middleware (before_turn).
  * Actions: continue | stop | compact | inject
  */
 const MiddlewareAction = {

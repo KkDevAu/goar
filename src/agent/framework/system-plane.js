@@ -235,14 +235,14 @@ function enrichToolResult(name, args, out) {
     (name === "pysec" && /ok:\s*false/i.test(s) && /http|fetch|probe|scan|httpx|nuclei|requests/i.test(JSON.stringify(args || {})))
   ) {
     if (snap.guest.online) {
-      hints.push("HINT: try guest_http or bash curl, and gecko_load so the page is visible.");
+      hints.push("HINT: try guest_http or bash curl, then open the page in Firefox.");
     } else {
-      hints.push("HINT: guest still booting — use web_fetch/http_request if origin allows CORS, or wait ONLINE then guest_http.");
+      hints.push("HINT: Alpine is still starting — use web_fetch if the origin allows CORS, or wait until the guest is ready.");
     }
     if (!snap.host.proxyOk) {
-      hints.push("HINT: CORS proxy not ready — ensureSystemPlanes wires /api/manus-key + /api/cors-proxy.");
+      hints.push("HINT: CORS proxy is not ready — retry shortly.");
     } else {
-      hints.push("HINT: proxy was marked OK but this hop failed — retry once or switch to guest_http.");
+      hints.push("HINT: proxy reported ready but this request failed — retry once or use guest_http.");
     }
   }
 
@@ -264,7 +264,7 @@ function enrichToolResult(name, args, out) {
 
   // unknown tool
   if (/^unknown tool:/i.test(s)) {
-    hints.push("HINT: create_tool to add capability, or use pysec umbrella with tool_id.");
+    hints.push("HINT: add the capability with create_tool, or call pysec with a catalog id.");
   }
 
   if (!hints.length) return s;
@@ -277,7 +277,7 @@ function enrichToolResult(name, args, out) {
 async function ensureSystemPlanes(opts) {
   const o = opts || {};
   const out = { kit: false, proxy: false, mw: false };
-  // 1) Mercury Workshop fabric first (libcurl+Wisp) — plane B primary
+  // 1) Network fabric first (libcurl + Wisp) — plane B primary
   try {
     if (typeof ensureMwFabric === "function") {
       const m = await ensureMwFabric(o.forceMw ? { force: true } : undefined);

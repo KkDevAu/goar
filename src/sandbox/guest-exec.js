@@ -1,13 +1,41 @@
+let __guestExecTail = Promise.resolve();
+
 async function guestExec(command, timeoutMs = 180000) {
+  const run = () => guestExecUnlocked(command, timeoutMs);
+  const next = __guestExecTail.then(run, run);
+  __guestExecTail = next.then(function () {}, function () {});
+  return next;
+}
+
+async function guestExecUnlocked(command, timeoutMs = 180000) {
   const emu = window.__emulator || (typeof emulator !== "undefined" ? emulator : null);
   if (!emu || typeof send !== "function") throw new Error("Guest environment not ready");
   const id = Math.random().toString(36).slice(2, 7);
   const start = "GOS" + id;
   const end = "GOE" + id;
-  const cmd = String(command).replace(/\r/g, "");
+  let cmd = String(command).replace(/\r/g, "");
 
-  // Fast path: short single-line commands — skip base64 staging (much faster)
-  const isShort = cmd.length <= 220 && !cmd.includes("\n") && !cmd.includes("base64");
+  // python3 -c '…' cannot travel the serial console: quotes are eaten or
+  // echoed as the payload. Rewrite to a file write + run. The long path
+  // then base64-encodes the whole script so the snippet never hits serial.
+  const dashC = cmd.match(/^\s*python3?\s+-c\s+(?:'([^']*)'|"([^"]*)")\s*(.*)$/);
+  if (dashC) {
+    const snippet = dashC[1] != null ? dashC[1] : dashC[2];
+    const extra = (dashC[3] || "").trim();
+    const staged = "/tmp/.goar_inline_" + id + ".py";
+    const b64 = btoa(unescape(encodeURIComponent(snippet)));
+    cmd =
+      "printf %s " + JSON.stringify(b64) + " | base64 -d > " + staged +
+      " && python3 " + staged + (extra ? " " + extra : "");
+  }
+
+  // Fast path only for plain single-line commands — no quotes, no python -c.
+  const isShort =
+    cmd.length <= 220 &&
+    !cmd.includes("\n") &&
+    !cmd.includes("base64") &&
+    !/['"]/.test(cmd) &&
+    !/\bpython3?\s+-c\b/.test(cmd);
   if (isShort) {
     try { emu.serial0_send("\n"); } catch (_) {}
     await sleep(40);
@@ -29,7 +57,7 @@ async function guestExec(command, timeoutMs = 180000) {
       const s = ln.trim();
       if (!s) return false;
       if (s === start || s.startsWith(end)) return false;
-      if (s.includes("/tmp/.gout")) return false;
+      if (s.includes("/tmp/.gout") || s.includes("/tmp/.ginl") || s.includes("/tmp/.goar_inline")) return false;
       return true;
     }).join("\n").trim();
     return { code: Number(m[1]), output: body.slice(0, 500000) };
@@ -70,12 +98,14 @@ async function guestExec(command, timeoutMs = 180000) {
   let m = out.match(re);
 
   if (!ok || !m) {
-    const mark2 = serialBuf.length;
-    const one = cmd.replace(/\n+/g, " ; ").slice(0, 280);
-    send("echo " + start + "; { " + one + " ; } 2>&1 | tail -c 8000; echo " + end + ":$?");
-    ok = await waitForSerial(re, Math.min(60000, timeoutMs));
-    out = serialBuf.slice(mark2);
-    m = out.match(re);
+    if (!/['"]/.test(cmd) && !/\bpython3?\s+-c\b/.test(cmd)) {
+      const mark2 = serialBuf.length;
+      const one = cmd.replace(/\n+/g, " ; ").slice(0, 280);
+      send("echo " + start + "; { " + one + " ; } 2>&1 | tail -c 8000; echo " + end + ":$?");
+      ok = await waitForSerial(re, Math.min(60000, timeoutMs));
+      out = serialBuf.slice(mark2);
+      m = out.match(re);
+    }
   }
 
   let body = out;
@@ -86,7 +116,7 @@ async function guestExec(command, timeoutMs = 180000) {
     const s = ln.trim();
     if (!s) return false;
     if (s.startsWith("printf %s")) return false;
-    if (s.includes("/tmp/.grun") || s.includes("/tmp/.gout")) return false;
+    if (s.includes("/tmp/.grun") || s.includes("/tmp/.gout") || s.includes("/tmp/.ginl") || s.includes("/tmp/.goar_inline")) return false;
     if (s === start || s.startsWith(end)) return false;
     return true;
   }).join("\n").trim();
@@ -101,7 +131,7 @@ async function ensureGuestNet() {
     "udhcpc -i eth0 -q -n -t 3 -T 2 2>/dev/null || true; " +
     "ip addr add 192.168.86.100/24 dev eth0 2>/dev/null || true; " +
     "ip route replace default via 192.168.86.1 dev eth0 2>/dev/null || true; " +
-    "printf 'nameserver 192.168.86.1\n' > /etc/resolv.conf; " +
+    "printf 'nameserver 192.168.86.1\\n' > /etc/resolv.conf; " +
     "pip --version; echo NET_SETUP_OK",
     60000,
   );
@@ -167,5 +197,3 @@ async function installOfflineFlask() {
   }
 }
 window.__GOAR_INSTALL_FLASK = installOfflineFlask;
-
-

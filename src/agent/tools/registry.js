@@ -12,7 +12,7 @@ function refreshAgentTools() {
       return AGENT_TOOLS.slice();
     };
     window.__GOAR_TOOL_SELECT = {
-      mode: "vibe",
+      mode: "compact",
       api: AGENT_TOOLS.length,
       catalog: typeof PYSEC_TOOL_COUNT === "number" ? PYSEC_TOOL_COUNT : 141,
       groups: ["bash", "write_file", "pysec", "browse"],

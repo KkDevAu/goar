@@ -7,7 +7,7 @@ const SERVICE_PROVIDERS = [
     defaultModel: "qwen7b",
     apiBase: "https://api.free.ai/v1",
     apiKeyUrl: "https://free.ai/",
-    placeholder: "optional — 30k tokens/day with no key",
+    placeholder: "optional — 30,000 tokens per day with no key",
     supportsTools: true,
     supportsStreaming: true,
     contextWindowTokens: 32768,

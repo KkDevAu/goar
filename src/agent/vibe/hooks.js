@@ -1,5 +1,5 @@
 /**
- * Frontend port of mistral-vibe agent_loop hooks.
+ * Agent loop hooks.
  * pre_tool / post_tool / post_agent — JS callbacks, not host subprocesses.
  */
 const vibeHooks = { pre_tool: [], post_tool: [], post_agent: [] };

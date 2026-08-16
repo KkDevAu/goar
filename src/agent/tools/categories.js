@@ -97,13 +97,13 @@
     recon: {
       name: "pysec_recon",
       label: "Recon / OSINT",
-      when: "DNS, subs, tech, archives, intel, cloud buckets, emailsec",
+      when: "DNS, subdomains, tech, archives, intel, cloud buckets, email security",
       examples: "dns.resolve, subenum.enumerate, tech.fingerprint, wayback.collect",
     },
     vuln: {
       name: "pysec_vuln",
-      label: "Vuln scan",
-      when: "authorized vuln checks, scanners, payloads (sqlmap/xss/nuclei/…)",
+      label: "Vulnerability scan",
+      when: "authorized vulnerability checks, scanners, payloads (sqlmap, xss, nuclei)",
       examples: "sqlmap.scan, xss.scan, nuclei.scan, nmap.http_probe, cors.scan",
     },
     analyze: {
@@ -139,7 +139,7 @@
     web_fetch: "Fetch URL via host fabric",
     http_request: "HTTP request (method/headers/body)",
     guest_http: "HTTP from Alpine guest (no CORS)",
-    mw_status: "Mercury Workshop fabric status",
+    mw_status: "Network fabric status",
     net_diag: "Guest DNS + HTTPS diagnostics",
     env_info: "Sandbox env/net status",
     kit_status: "Pysec kit status",
@@ -193,7 +193,7 @@
     remove_tool: "Remove a session dynamic tool",
     install_flask: "Offline flask on guest (heavy)",
     discover: "Find capabilities by intent (query). Returns a few matches — do not dump the catalog.",
-    crypto: "Host hash/hmac/aes (Web Crypto + crypto-js). Instant — prefer over pysec for simple digest",
+    crypto: "Host hash/hmac/aes (Web Crypto). Instant for a simple digest",
     wasm: "Load/validate/call a WASM module (url or base64)",
     schema_validate: "Validate JSON against a JSON Schema",
     chart: "Draw bar|line|pie from [{label,value}]",
@@ -390,10 +390,168 @@
 
   function categoryKitBlurb() {
     return (
-      "\n## VIBE\n" +
-      "Do the job. guest bash/read/write/grep/tree for the workspace. net browse for the web.\n" +
-      "Never list tools. Never dump a catalog. Explore = run the tree.\n"
+      "\n## Work\n" +
+      "Use guest for the workspace (bash, read, write, grep, tree). Use net to browse the web.\n" +
+      "Do not list tools or dump the catalog. To explore, run the workspace tree.\n"
     );
+  }
+
+  const HASH_ALGO = {
+    sha1: "sha1",
+    "sha-1": "sha1",
+    sha256: "sha256",
+    "sha-256": "sha256",
+    sha384: "sha384",
+    "sha-384": "sha384",
+    sha512: "sha512",
+    "sha-512": "sha512",
+    sha3: "sha3",
+    md5: "md5",
+    blake2: "blake2s",
+    blake2s: "blake2s",
+    blake2b: "blake2b",
+  };
+
+  const FAMILY_DEFAULT = {
+    hash: "hash.digest",
+    codec: "codec.encode",
+    jwt: "jwt.inspect",
+    sqlmap: "sqlmap.scan",
+    xss: "xss.scan",
+    nuclei: "nuclei.scan",
+    dns: "dns.resolve",
+    sast: "sast.scan",
+    secrets: "secrets.scan",
+    nmap: "nmap.http_probe",
+    cors: "cors.scan",
+    csp: "csp.analyze",
+    httpx: "httpx.probe",
+    yara: "yara.scan",
+    ssti: "ssti.scan",
+    ssrf: "ssrf.scan",
+    xxe: "xxe.scan",
+    waf: "waf.detect",
+    cookie: "cookie.scan",
+    emailsec: "emailsec.check",
+    subenum: "subenum.enumerate",
+    wayback: "wayback.collect",
+    cloud: "cloud.bucket",
+    otp: "otp.totp",
+    cipher: "cipher.decrypt",
+    password: "password.analyze",
+    headers: "headers.analyze",
+    url: "url.analyze",
+    fetch: "fetch.analyze",
+    nikto: "nikto.scan",
+    dirb: "dirb.brute",
+    backup: "backup.scan",
+    cms: "cms.detect",
+    graphql: "graphql.introspect",
+    redos: "redos.analyze",
+    nosql: "nosql.scan",
+    clickjack: "clickjack.scan",
+    robots: "robots.scan",
+    asn: "asn.lookup",
+    ct: "ct.search",
+    mutator: "mutator.mutate",
+    upload: "upload.bypass",
+    homoglyph: "homoglyph.generate",
+    form: "form.scan",
+    intel: "intel.urlhaus",
+    crack: "crack.hash",
+    hashid: "hashid.identify",
+    x509: "x509.parse",
+    jwtadv: "jwtadv.none",
+    fuzzgen: "fuzzgen.generate",
+    requests: "requests.get",
+    param: "param.discover",
+    takeover: "takeover.check",
+    wpscan: "wpscan.scan",
+    smuggle: "smuggle.detect",
+    inject: "inject.scan",
+    crlf: "crlf.scan",
+    redirect: "redirect.scan",
+    pp: "pp.scan",
+    oauth: "oauth.analyze",
+    wellknown: "wellknown.scan",
+    katana: "katana.crawl",
+    jsrecon: "jsrecon.analyze",
+    headerfuzz: "headerfuzz.fuzz",
+    internetdb: "internetdb.lookup",
+    favicon: "favicon.hash",
+    tech: "tech.fingerprint",
+    api: "api.discover",
+    vhost: "vhost.brute",
+    har: "har.parse",
+    proxy: "proxy.status",
+    repeater: "repeater.send",
+  };
+
+  /**
+   * Map shorthand / wrong ids (hash, hash.sha256, codec.b64) to catalog ids
+   * and fill implied kwargs (algorithm, format).
+   */
+  function resolvePysecToolId(raw, kwargs) {
+    const out = Object.assign({}, kwargs || {});
+    let id = String(raw || "").trim();
+    if (!id) return { id: "", kwargs: out };
+
+    if (out.format === "b64") out.format = "base64";
+    if (out.fmt === "b64") out.format = out.format || "base64";
+
+    let known = false;
+    try {
+      const meta = getIndex().idToMeta;
+      known = !!(meta && meta[id]);
+    } catch (_) {}
+    if (known) {
+      return { id: id, kwargs: aliasPysecKwargs(id, out) };
+    }
+
+    const lower = id.toLowerCase().replace(/\s+/g, "");
+
+    if (HASH_ALGO[lower] || lower === "sha256" || lower === "sha1" || lower === "md5") {
+      if (!out.algorithm) out.algorithm = HASH_ALGO[lower] || lower;
+      return { id: "hash.digest", kwargs: aliasPysecKwargs("hash.digest", out) };
+    }
+    const hashAlgo = lower.match(/^hash\.(sha-?1|sha-?256|sha-?384|sha-?512|sha3|md5|blake2s?|blake2b)$/);
+    if (hashAlgo) {
+      if (!out.algorithm) out.algorithm = HASH_ALGO[hashAlgo[1]] || hashAlgo[1].replace(/-/g, "");
+      return { id: "hash.digest", kwargs: aliasPysecKwargs("hash.digest", out) };
+    }
+    if (lower === "hash" || lower === "digest" || lower === "sha") {
+      if (!out.algorithm) out.algorithm = "sha256";
+      return { id: "hash.digest", kwargs: aliasPysecKwargs("hash.digest", out) };
+    }
+
+    const encodeB64 = /^(codec\.(b64|base64|encode\.b64)|b64|base64|b64encode)$/.test(lower);
+    const decodeB64 = /^(codec\.(decode\.b64|unb64|fromb64|decode\.base64)|b64decode)$/.test(lower);
+    if (decodeB64 || (encodeB64 && /decod/i.test(String(out.action || "")))) {
+      if (!out.format) out.format = "base64";
+      delete out.action;
+      return { id: "codec.decode", kwargs: aliasPysecKwargs("codec.decode", out) };
+    }
+    if (encodeB64) {
+      if (!out.format) out.format = "base64";
+      delete out.action;
+      return { id: "codec.encode", kwargs: aliasPysecKwargs("codec.encode", out) };
+    }
+    if (lower === "codec.hex" || lower === "hex") {
+      if (!out.format) out.format = "hex";
+      return { id: "codec.encode", kwargs: aliasPysecKwargs("codec.encode", out) };
+    }
+
+    const fam = FAMILY_DEFAULT[lower];
+    if (fam) {
+      return { id: fam, kwargs: aliasPysecKwargs(fam, out) };
+    }
+
+    if (typeof PYSEC_FN_TO_ID !== "undefined" && PYSEC_FN_TO_ID && PYSEC_FN_TO_ID[id]) {
+      const mapped = PYSEC_FN_TO_ID[id];
+      return { id: mapped, kwargs: aliasPysecKwargs(mapped, out) };
+    }
+
+    return { id: id, kwargs: aliasPysecKwargs(id, out) };
   }
 
   function aliasPysecKwargs(toolId, kwargs) {
@@ -449,7 +607,8 @@
       if (n === "kit" && action.indexOf(".") !== -1) {
         let kwargs = args.kwargs && typeof args.kwargs === "object" ? Object.assign({}, args.kwargs) : Object.assign({}, args);
         delete kwargs.action; delete kwargs.tool; delete kwargs.tool_id; delete kwargs.kwargs;
-        return { kind: "pysec", name: action, args: aliasPysecKwargs(action, kwargs) };
+        const resolved = resolvePysecToolId(action, kwargs);
+        return { kind: "pysec", name: resolved.id, args: resolved.kwargs };
       }
       if (n === "kv") {
         const kvAlias = { set: "kv_set", get: "kv_get", del: "kv_del", delete: "kv_del", keys: "kv_keys", status: "kv_status" };
@@ -492,7 +651,9 @@
       if (!toolId) {
         return { error: "tool (catalog id) required for " + n };
       }
-      kwargs = aliasPysecKwargs(toolId, kwargs);
+      const resolved = resolvePysecToolId(toolId, kwargs);
+      toolId = resolved.id;
+      kwargs = resolved.kwargs;
       // optional lane check
       if (n !== "pysec") {
         const lane = n.replace(/^pysec_/, "");
@@ -532,7 +693,7 @@
       .toLowerCase()
       .trim();
     if (!q) {
-      return JSON.stringify({ ok: false, hint: "Say the job." });
+      return JSON.stringify({ ok: false, hint: "Describe what you need." });
     }
     const askingMap = /\b(tools?|available|securit|pysec|what can|capabilities|kit)\b/.test(q);
     if (askingMap) {
@@ -582,8 +743,8 @@
     if (/\b(bash|shell|python|write|read|edit|grep|glob|mkdir)\b/.test(q)) force = "guest";
     else if (/\b(fetch|http|search|wisp|browser|click|type|screenshot)\b/.test(q)) force = "net";
     else if (/\b(kv|cache|ttl)\b/.test(q)) force = "kv";
-    else if (/\b(hash|sha|hmac|aes|wasm|micropip)\b/.test(q)) force = "kit";
-    else if (/\b(jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "pysec";
+    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "pysec";
+    else if (/\b(wasm|micropip)\b/.test(q)) force = "kit";
 
     const hits = [];
     function add(via, id, why) {
@@ -592,8 +753,10 @@
       const blob = (via + " " + id + " " + why).toLowerCase();
       for (const t of terms) {
         if (id.toLowerCase() === t) score += 10;
+        else if (id.toLowerCase().split(".")[0] === t || id.toLowerCase().startsWith(t + ".")) score += 8;
         else if (blob.indexOf(t) !== -1) score += t.length > 4 ? 3 : 1;
       }
+      if (FAMILY_DEFAULT[id] || id === "hash.digest" || id === "codec.encode" || id === "jwt.inspect") score += 2;
       if (id === "list_session_tools" || id === "discover") return;
       if (!score) return;
       hits.push({ call: via, use: id, why: why, score: score });
@@ -630,22 +793,18 @@
   global.buildCategoryAgentTools = buildCategoryAgentTools;
   global.categoryKitBlurb = categoryKitBlurb;
   global.resolveCategoryCall = resolveCategoryCall;
+  global.resolvePysecToolId = resolvePysecToolId;
   global.isCategoryToolName = isCategoryToolName;
   global.invalidateCategoryIndex = invalidateCategoryIndex;
   global.getCategoryIndex = getIndex;
   global.toolDiscover = toolDiscover;
-  global.buildCategoryAgentTools = buildCategoryAgentTools;
-  global.categoryKitBlurb = categoryKitBlurb;
-  global.resolveCategoryCall = resolveCategoryCall;
-  global.isCategoryToolName = isCategoryToolName;
-  global.invalidateCategoryIndex = invalidateCategoryIndex;
-  global.getCategoryIndex = getIndex;
   try {
     if (typeof window !== "undefined" && window !== global) {
       for (const k of [
         "buildCategoryAgentTools",
         "categoryKitBlurb",
         "resolveCategoryCall",
+        "resolvePysecToolId",
         "isCategoryToolName",
         "invalidateCategoryIndex",
         "getCategoryIndex",

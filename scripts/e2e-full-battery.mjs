@@ -279,8 +279,13 @@ for (const [name, args] of PYSEC) {
     } catch (e) { return { error: String(e && e.message ? e.message : e) }; }
   }, { name, args });
   const text = r.out || r.error || JSON.stringify(r);
-  if (r.missing || r.error || /TOOL_ERROR|not defined/i.test(text)) fail("tools", name, text);
-  else ok("tools", name, text);
+  const id = args.tool_id || args.tool || name;
+  const digest = "01858a949a488cf675f20f3896d6f960e4753f3f0808b1cdebcd3984dacdfded";
+  const liveOk = id === "codec.b64"
+    ? /Z29hcg==/.test(text)
+    : text.indexOf(digest) !== -1;
+  if (r.missing || r.error || /TOOL_ERROR|not defined|unknown tool/i.test(text) || !liveOk) fail("tools", name + ":" + id, text);
+  else ok("tools", name + ":" + id, text);
 }
 
 const agentBrowse = await page.evaluate(async () => {

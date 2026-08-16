@@ -158,7 +158,7 @@ function applyCredProvider() {
   const hint = document.querySelector("#credPhase .hint");
   if (hint) {
     hint.textContent = noKey
-      ? "Free.ai demo · 30k tokens/day · no key · switch provider anytime"
+      ? "Free.ai demo · 30,000 tokens per day · no key · switch provider anytime"
       : "Provider + API key · models load live from your API";
   }
 }

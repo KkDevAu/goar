@@ -1,6 +1,6 @@
 /**
  * Agent WASM loader — MDN instantiateStreaming / validate / call.
- * Lets the agent load a .wasm module and invoke exports (vibe: create capability on the fly).
+ * Lets the agent load a .wasm module and invoke exports.
  */
 const WASM_MODS = Object.create(null);
 

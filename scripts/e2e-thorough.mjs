@@ -279,21 +279,12 @@ try {
     const py = await ev(async () => {
       try {
         const a = await guestExec('python3 -c "print(40+2)"', 30000);
-        if (/42/.test(JSON.stringify(a))) return a;
-        await new Promise((r) => setTimeout(r, 1200));
-        return await guestExec('python3 -c "print(40+2)"', 30000);
+        const b = await guestExec("python3 -c 'print(7*6)'", 30000);
+        return { a, b };
       } catch (e) { return { error: String(e) }; }
     });
-    const pyOk = /42/.test(JSON.stringify(py));
-    if (!pyOk) {
-      const viaTool = await ev(async () => {
-        try { return await runAgentTool("python_exec", { code: "print(40+2)" }); }
-        catch (e) { return String(e); }
-      });
-      mark("term", "python3", /42/.test(String(viaTool)), "via tool " + String(viaTool).slice(0, 80));
-    } else {
-      mark("term", "python3", true, JSON.stringify(py).slice(0, 120));
-    }
+    const pyOk = /42/.test(JSON.stringify(py && py.a)) && /42/.test(JSON.stringify(py && py.b));
+    mark("term", "python3", pyOk, JSON.stringify(py).slice(0, 220));
   }
 
   await ev(() => goarShowView("computer"));
@@ -388,6 +379,29 @@ try {
     mark("tools", name, !bad || /ok["']?\s*:\s*true/i.test(text), text);
   }
 
+  const aliases = await ev(() => {
+    const fn = typeof resolvePysecToolId === "function" ? resolvePysecToolId : null;
+    if (!fn) return { missing: true };
+    return {
+      hash: fn("hash", { data: "goar" }),
+      sha: fn("hash.sha256", { data: "goar" }),
+      b64: fn("codec.b64", { data: "goar", action: "encode" }),
+    };
+  });
+  mark("kit", "alias-hash", !aliases.missing && aliases.hash && aliases.hash.id === "hash.digest", JSON.stringify(aliases.hash || aliases));
+  mark("kit", "alias-sha256", !aliases.missing && aliases.sha && aliases.sha.id === "hash.digest" && String((aliases.sha.kwargs || {}).algorithm) === "sha256", JSON.stringify(aliases.sha || aliases));
+  mark("kit", "alias-b64", !aliases.missing && aliases.b64 && aliases.b64.id === "codec.encode" && String((aliases.b64.kwargs || {}).format) === "base64", JSON.stringify(aliases.b64 || aliases));
+
+  const kitReady = await ev(async () => {
+    try {
+      if (typeof ensurePysecWorker === "function") await ensurePysecWorker();
+    } catch (e) {
+      return { error: String(e && e.message ? e.message : e) };
+    }
+    return { ready: !!(window.__pysecReady || (typeof __pysecReady !== "undefined" && __pysecReady)) };
+  });
+  mark("kit", "pysec-ready", !!(kitReady && kitReady.ready), JSON.stringify(kitReady));
+
   const PYSEC = [
     ["pysec_crypto", { tool: "hash", kwargs: { algo: "sha256", data: "goar" } }],
     ["pysec", { tool_id: "codec.b64", kwargs: { action: "encode", data: "goar" } }],
@@ -401,7 +415,13 @@ try {
       } catch (e) { return { error: String(e && e.message ? e.message : e) }; }
     }, { name, args });
     const text = r.out || r.error || JSON.stringify(r);
-    mark("kit", name + ":" + (args.tool_id || args.tool || "x"), !r.error && !/TOOL_ERROR|not defined/i.test(text), text);
+    const id = args.tool_id || args.tool || "x";
+    const digest = "01858a949a488cf675f20f3896d6f960e4753f3f0808b1cdebcd3984dacdfded";
+    const digestOk = text.indexOf(digest) !== -1 && /ok["']?\s*:\s*true/i.test(text);
+    const b64Ok = /Z29hcg==/.test(text) && !/unknown tool/i.test(text);
+    const ok = !r.error && !/TOOL_ERROR|not defined|unknown tool/i.test(text) &&
+      (id === "codec.b64" ? b64Ok : digestOk);
+    mark("kit", name + ":" + id, ok, text.slice(0, 280));
   }
 
   const loop = await ev(() => ({
@@ -409,13 +429,13 @@ try {
     compact: typeof maybeCompactAgentHistory === "function" || typeof maybeCompactAgentHistoryAsync === "function",
     pin: typeof pinMission === "function",
     steer: typeof queueSteer === "function" && typeof drainSteers === "function",
-    vibe: typeof runVibeBeforeTurn === "function",
+    middleware: typeof runVibeBeforeTurn === "function",
     tools: (typeof getAgentTools === "function" ? getAgentTools() : []).length,
   }));
   mark("loop", "turn", loop.turn, JSON.stringify(loop));
   mark("loop", "compact", loop.compact, JSON.stringify(loop));
   mark("loop", "steer-api", loop.steer, JSON.stringify(loop));
-  mark("loop", "vibe", loop.vibe, JSON.stringify(loop));
+  mark("loop", "middleware", loop.middleware, JSON.stringify(loop));
   mark("loop", "tool-count", loop.tools > 0 && loop.tools <= 128, String(loop.tools));
 
   const net = await ev(() => ({

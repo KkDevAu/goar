@@ -19,7 +19,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "write_file",
-    description: "Create or OVERWRITE a complete UTF-8 file on the guest. CRITICAL: pass the ENTIRE file body in one call — never line-by-line (each call replaces the whole file). Full CPython 3.11 + pip are on the guest. Flask wheels are offline-installable via host bundle (/opt/wheels). If pip network fails: `pip install --no-index --find-links=/opt/wheels flask`. Full CPython 3.11 + pip are on the guest. You can pip install, write multi-file projects, run Flask, build tools. Prefer /workspace/...",
+    description: "Write a complete UTF-8 file on the guest. Pass the entire file body in one call — each call replaces the whole file. CPython 3.11 and pip are available. Flask wheels install offline via `pip install --no-index --find-links=/opt/wheels flask`. Prefer /workspace/...",
     parameters: { type: "object", properties: {
       path: { type: "string" },
       content: { type: "string", description: "Full file contents" }
@@ -199,7 +199,7 @@ let CORE_AGENT_TOOLS = [
   { type: "function", function: { name: "recall_memory", description: "Recall memories", parameters: { type: "object", properties: { query: { type: "string" }, limit: { type: "number" } } } }},
   { type: "function", function: {
     name: "set_phase",
-    description: "Adaptive Engineer phase: ASSESS|PLAN|VALIDATE|EXECUTE|REVIEW|VERIFY|DELIVER. Call when entering a new phase.",
+    description: "Execution phase: ASSESS|PLAN|VALIDATE|EXECUTE|REVIEW|VERIFY|DELIVER. Call when entering a new phase.",
     parameters: { type: "object", properties: {
       phase: { type: "string" },
       note: { type: "string" }
@@ -214,7 +214,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "mw_status",
-    description: "Mercury Workshop network fabric status: libcurl/epoxy engine, Wisp URL, probe. Call when diagnosing live HTTP.",
+    description: "Network fabric status: TLS engine, Wisp URL, probe. Use when diagnosing live HTTP.",
     parameters: { type: "object", properties: {} }
   }},
   { type: "function", function: {
@@ -277,7 +277,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "kv_status",
-    description: "HeyPuter kv.js plane status: keys, IndexedDB, namespaces (mem/mission/settings/gecko/session). Host cache — not guest FS.",
+    description: "KV cache status: keys, IndexedDB, namespaces (mem/mission/settings/gecko/session). Host cache — not guest FS.",
     parameters: { type: "object", properties: {} }
   }},
   { type: "function", function: {
@@ -361,7 +361,7 @@ function rebuildPysecFnMaps() {
   } catch (_) {}
 }
 
-/** What the model sees — Vibe/OpenAI: few first-class tools, short schemas. */
+/** What the model sees: few first-class tools, short schemas. */
 const GOAR_API_TOOLS = [
   { type: "function", function: {
     name: "bash",

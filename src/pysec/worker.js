@@ -350,7 +350,7 @@ _wrap_timeout("nmap.nse_http", 16, port_cap=None)
   return { ok: true };
 }
 async function toolPysec(args) {
-  let toolId = String((args && (args.tool_id || args.toolId || args.id)) || "").trim();
+  let toolId = String((args && (args.tool_id || args.toolId || args.id || args.tool)) || "").trim();
   if (toolId === "list_tools" || toolId === "list" || toolId === "catalog") {
     try {
       await ensurePysecWorker();
@@ -372,9 +372,18 @@ json.dumps({"ok": True, "count": len(ids), "tools": ids[:200]})
   }
   if (!kwargs || typeof kwargs !== "object" || Array.isArray(kwargs)) {
     kwargs = Object.assign({}, args || {});
-    delete kwargs.tool_id; delete kwargs.toolId; delete kwargs.id;
+    delete kwargs.tool_id; delete kwargs.toolId; delete kwargs.id; delete kwargs.tool;
     delete kwargs.kwargs; delete kwargs.arguments;
   }
+  try {
+    if (typeof resolvePysecToolId === "function") {
+      const resolved = resolvePysecToolId(toolId, kwargs);
+      if (resolved && resolved.id) {
+        toolId = resolved.id;
+        kwargs = resolved.kwargs || kwargs;
+      }
+    }
+  } catch (_) {}
   try {
     await ensurePysecWorker();
     const payload = JSON.stringify({ tool_id: toolId, kwargs: kwargs || {} });
@@ -387,25 +396,26 @@ tid = req["tool_id"]
 kw = dict(req.get("kwargs") or {})
 meta = _BY_ID.get(tid) or {}
 fn = meta.get("fn")
-# Drop unknown kwargs so shared agent payloads do not TypeError
-try:
-    if fn is not None:
+_res = None
+if fn is None:
+    _res = {"ok": False, "error": "unknown tool: " + tid, "tool_id": tid}
+else:
+    try:
         sig = inspect.signature(fn)
         if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
             pass
         else:
             allowed = set(sig.parameters.keys())
             kw = {k: v for k, v in kw.items() if k in allowed}
-except Exception:
-    pass
-if meta.get("async") or (fn is not None and inspect.iscoroutinefunction(fn)):
-    _res = await run_tool_async(tid, **kw)
-else:
-    _res = run_tool(tid, **kw)
+    except Exception:
+        pass
+    if meta.get("async") or inspect.iscoroutinefunction(fn):
+        _res = await run_tool_async(tid, **kw)
+    else:
+        _res = run_tool(tid, **kw)
 json.dumps(_res, default=str)
 `);
     const raw = typeof out === "string" ? out : JSON.stringify(out);
-    // Structured for the agent loop (kit is first-class tool surface)
     try {
       const j = JSON.parse(raw);
       return JSON.stringify({

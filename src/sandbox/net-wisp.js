@@ -1,6 +1,6 @@
 /** Virtio-net: prefer browser-native fetch proxy (fast HTTPS); WSS relay fallback */
 // WISP = full TCP/UDP tunnel (real HTTPS from guest Python/goar)
-// Public Mercury WISP works without self-hosting; override with window.GOAR_WISP_URL
+// Public WISP endpoint works without self-hosting; override with window.GOAR_WISP_URL
 /** Networking: WISP = full TCP (HTTPS works for Python/goar). Override: window.GOAR_WISP_URL */
 /** Production networking: WISP (full TCP/HTTPS). Override window.GOAR_WISP_URL */
 const NET_RELAYS = [

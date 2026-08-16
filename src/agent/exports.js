@@ -10,7 +10,7 @@ window.__goarMarkEnvReady = function (ok, detail) {
     if (!was && !window.__GOAR_ONLINE_ANNOUNCED) {
       window.__GOAR_ONLINE_ANNOUNCED = true;
       try {
-        appendMsg("Workspace live — sandbox, Firefox, fetch, and kit share the same job. Ask, then GOAR uses them together.", "sys");
+        appendMsg("Ready.", "sys");
       try { if (typeof ensureSystemPlanes === "function") ensureSystemPlanes(); } catch (_) {}
       } catch (_) {}
     }

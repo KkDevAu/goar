@@ -1,5 +1,5 @@
 /**
- * Session scratchpad — Vibe temp workspace.
+ * Session scratchpad.
  * Guest: /workspace/.scratch/<name>
  * KV:    ns=scratch
  * Used for notes, drafts, probes — not the product tree.
