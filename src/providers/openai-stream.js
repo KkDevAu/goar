@@ -59,9 +59,13 @@ async function openaiChatStream({
     // try parse error then fallback
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      // auth hard-fail
       if (resp.status === 401 || resp.status === 403) {
         throw new Error("Auth failed (" + resp.status + "): " + errText.slice(0, 200));
+      }
+      if (/model is restarting|please resend|temporarily unavailable|overloaded/i.test(errText) || resp.status === 503) {
+        await new Promise((r) => setTimeout(r, 1800));
+        const data = await openaiChat({ messages, tools, stream: false, includeTools, signal });
+        return normalizeChatResultFromJson(data, onTextDelta, onThinkingDelta);
       }
     }
     try {

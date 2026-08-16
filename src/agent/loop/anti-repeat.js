@@ -144,6 +144,72 @@ function restoreAgentChat() {
   } catch (_) {}
 }
 
+const ICON_SEND = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>';
+const ICON_STOP = '<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.2"/></svg>';
+
+function queueSteer(text) {
+  const t = String(text || "").trim();
+  if (!t) return;
+  if (!window.__GOAR_STEER) window.__GOAR_STEER = [];
+  window.__GOAR_STEER.push(t);
+}
+
+function drainSteers() {
+  const list = (window.__GOAR_STEER || []).map((s) => String(s || "").trim()).filter(Boolean);
+  window.__GOAR_STEER = [];
+  return list;
+}
+
+function formatSteer(list) {
+  const rows = Array.isArray(list) ? list.filter(Boolean) : [];
+  if (!rows.length) return "";
+  return "[additional context from the user — apply this now. Do not restart the mission.]\n" + rows.join("\n\n");
+}
+
+function paintLiveWork(patch) {
+  const el = document.getElementById("live-work");
+  const text = document.getElementById("live-work-text");
+  const running = typeof agentBusy !== "undefined" && !!agentBusy;
+  if (el) el.hidden = !running;
+  if (!text) return;
+  let label = "";
+  if (patch && patch.text) label = String(patch.text);
+  else {
+    const phase = (typeof __ind !== "undefined" && __ind.phase) || "";
+    const tool = (typeof __ind !== "undefined" && __ind.tool) || "";
+    if (phase === "thinking") label = "Thinking";
+    else if (phase === "streaming") label = "Writing";
+    else if (phase === "tool" && tool) label = tool;
+    else if (/stop/i.test(phase)) label = "Stopping";
+    else if (running) label = "Working";
+  }
+  if (label) text.textContent = label;
+}
+
+function paintComposerMode() {
+  const running = typeof agentBusy !== "undefined" && !!agentBusy;
+  const box = document.querySelector("#input-wrap .input-box");
+  const send = document.getElementById("send-btn");
+  const input = document.getElementById("msg-input");
+  const live = document.getElementById("live-work");
+  if (box) box.classList.toggle("running", running);
+  if (live) live.hidden = !running;
+  try { document.body.classList.toggle("agent-running", running); } catch (_) {}
+  const hasText = !!(input && String(input.value || "").trim());
+  if (send) {
+    const stopMode = running && !hasText;
+    send.classList.toggle("is-stop", stopMode);
+    send.innerHTML = stopMode ? ICON_STOP : ICON_SEND;
+    send.disabled = false;
+    send.setAttribute("aria-label", stopMode ? "Stop" : (running ? "Add context" : "Send"));
+    send.title = stopMode ? "Stop" : (running ? "Add to the run" : "Send");
+  }
+  if (input) {
+    input.placeholder = running ? "Add context — or stop" : "Request Anything";
+  }
+  paintLiveWork();
+}
+
 /**
  * @param {boolean} on
  * @param {string} [text]
@@ -154,13 +220,17 @@ function setRunningUI(on, text) {
     ab.style.display = on ? "inline-block" : "none";
     ab.classList.toggle("on", !!on);
   }
-  if (!on) syncIndicators({ phase: "idle", tool: "", detail: "" });
-  else {
+  if (!on) {
+    syncIndicators({ phase: "idle", tool: "", detail: "" });
+  } else {
     const s = String(text || "thinking").replace(/\.\.\./g, "");
     if (/think/i.test(s)) syncIndicators({ phase: "thinking", tool: "" });
-    else if (/stream/i.test(s)) syncIndicators({ phase: "streaming", tool: "" });
-    else syncIndicators({ phase: "tool", tool: s.slice(0, 48) });
+    else if (/^(stream|streaming|writing)$/i.test(s)) syncIndicators({ phase: "streaming", tool: "" });
+    else if (/^stopp/i.test(s)) syncIndicators({ phase: "tool", tool: "Stopping" });
+    else syncIndicators({ phase: "tool", tool: s.slice(0, 64) });
   }
+  paintLiveWork(on ? { text: String(text || "Thinking").replace(/\.\.\./g, "") } : null);
+  paintComposerMode();
 }
 
 function requestAgentStop() {
@@ -168,6 +238,7 @@ function requestAgentStop() {
   try { agentAbortController?.abort(); } catch (_) {}
   setStatusFooter("stopping...");
   setRunningUI(true, "stopping...");
+  paintLiveWork({ text: "Stopping" });
 }
 
 

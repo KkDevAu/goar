@@ -1,4 +1,4 @@
-const FREEZE_VERSION = "goar-freeze-v1";
+const FREEZE_VERSION = "goar-freeze-v3-manus";
 const FREEZE_OPFS_DIR = "goaros";
 const FREEZE_OPFS_FILE = "frozen-session.bin";
 const FREEZE_OPFS_META = "frozen-session.meta.json";

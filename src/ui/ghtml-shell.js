@@ -88,6 +88,7 @@
 
   /* ---------- views ---------- */
   function goarShowView(view) {
+    if (view === "files" || view === "workspace") view = "ide";
     document.body.classList.remove("split-computer", "files-only", "files-ide", "view-computer", "view-files", "view-term");
     $("browser-tab")?.classList.remove("open", "view-active", "active");
     $("files-sheet-overlay")?.classList.remove("open", "view-active", "active");
@@ -249,10 +250,12 @@
     if (st) st.textContent = "starting";
     if (typeof ensureGecko === "function") {
       try {
+        const cur = (typeof geckoStatus === "function" && geckoStatus()) || {};
+        const keep = !!(cur.lastUrl || (cur.ready && document.getElementById("goar-live-frame")));
         const r = await ensureGecko({
-          mode: "embed",
-          url: window.GOAR_GECKO_HOME || "https://duckduckgo.com/",
+          mode: "live",
           show: true,
+          url: keep ? undefined : (window.GOAR_GECKO_HOME || "https://html.duckduckgo.com/html/"),
         });
         if (st) st.textContent = r && r.ready ? "live" : "warming";
         if (empty && r && r.ready) {
@@ -260,6 +263,9 @@
           empty.classList.add("hidden");
         }
         if (typeof fitGecko === "function") await fitGecko();
+        if (typeof sizeChromeIframe === "function") sizeChromeIframe();
+        try { document.getElementById("goar-live-frame")?.contentWindow?.focus(); } catch (_) {}
+        try { document.getElementById("geckoChromeFrame")?.contentWindow?.focus(); } catch (_) {}
         try { document.getElementById("geckoCanvas")?.focus(); } catch (_) {}
       } catch (e) {
         if (st) st.textContent = "error";
@@ -564,6 +570,7 @@
       btn.addEventListener("click", () => goarShowView(btn.getAttribute("data-view")));
     });
     $("btn-new")?.addEventListener("click", newSession);
+    $("btn-history")?.addEventListener("click", () => toggleHistory());
     $("btn-rewind")?.addEventListener("click", () => toggleHistory());
     $("btn-settings")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -586,9 +593,9 @@
       newSession();
       renderHistory();
     });
-    $("btn-menu")?.addEventListener("click", () => toggleDrawer());
+    $("btn-menu")?.addEventListener("click", () => toggleHistory());
     $("drawer-overlay")?.addEventListener("click", (e) => {
-      if (e.target === $("drawer-overlay")) toggleDrawer(false);
+      if (e.target === $("drawer-overlay")) toggleHistory(false);
     });
     document.querySelectorAll(".menu-item[data-view]").forEach((b) => {
       b.addEventListener("click", () => {
@@ -732,6 +739,8 @@
 
   window.goarShowView = goarShowView;
   window.goarShowOnboardPane = showOnboardPane;
+  window.toggleHistory = toggleHistory;
+  window.renderHistory = renderHistory;
   window.toggleDrawer = toggleDrawer;
   window.closeDrawer = function (e) {
     if (!e || e.target === $("drawer-overlay")) toggleDrawer(false);

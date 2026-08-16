@@ -86,7 +86,10 @@ document.getElementById("btnFreezeNow")?.addEventListener("click", async () => {
       const provider = (p && p.value) || "";
       const apiBase = (b && b.value) || "";
       const apiKey = (k && k.value) || "";
-      const needsKey = provider !== "ollama" && provider !== "openai-compatible";
+      const prov = typeof getProvider === "function" ? getProvider(provider) : null;
+      const needsKey = typeof providerNeedsKey === "function"
+        ? providerNeedsKey(prov)
+        : (provider !== "ollama" && provider !== "openai-compatible" && provider !== "freeai");
       if (!apiKey && needsKey) {
         if (typeof setCredReady === "function") setCredReady(false, "Paste a key to list models");
         return;

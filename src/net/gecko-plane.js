@@ -82,7 +82,7 @@
     return u;
   }
   function resolveGeckoWisp() {
-    const fallback = "wss://wisp.mercurywork.shop/";
+    const fallback = "wss://cors.manus.space/wisp/";
     try {
       if (typeof resolveWispUrl === "function") {
         const u = cleanWisp(resolveWispUrl());
@@ -226,6 +226,7 @@
   }
   function geckoShow() {
     ensurePane(true, STATE.mode);
+    if (STATE.mode === "chrome") sizeChromeIframe();
     fitGecko().then(function () {
       try { STATE.canvas && STATE.canvas.focus(); } catch (_) {}
     }).catch(function () {});
@@ -402,6 +403,38 @@
     return geckoStatus();
   }
 
+  function sizeChromeIframe() {
+    const iframe = STATE.iframe;
+    if (!iframe) return null;
+    const host = STATE.host || document.getElementById("browser-frame-wrap");
+    let w = 1100, h = 720;
+    try {
+      const r = (host || iframe).getBoundingClientRect();
+      if (r.width >= 80 && r.height >= 80) {
+        w = Math.floor(r.width);
+        h = Math.floor(r.height);
+      } else {
+        w = Math.max(640, (window.innerWidth || 1280) - 48);
+        h = Math.max(400, window.innerHeight || 800);
+      }
+    } catch (_) {}
+    try {
+      const win = iframe.contentWindow;
+      if (win && typeof win.geckoResize === "function") {
+        win.geckoResize(w, h);
+      } else if (win && win.__GOAR_GECKO_ENGINE && typeof win.__GOAR_GECKO_ENGINE.resize === "function") {
+        win.__GOAR_GECKO_ENGINE.resize(w, h);
+      }
+      const doc = iframe.contentDocument;
+      const screen = doc && (doc.getElementById("screen") || doc.querySelector("canvas"));
+      if (screen && (screen.width < 80 || screen.height < 80)) {
+        screen.width = w;
+        screen.height = h;
+      }
+    } catch (_) {}
+    return { w, h };
+  }
+
   function setUrlLabel(u) {
     const el = document.getElementById("geckoPaneUrl");
     if (el) el.textContent = u || "";
@@ -503,6 +536,7 @@
                 clearInterval(iv);
                 clearTimeout(timer);
                 try { win.geckoLoad(home); } catch (_) {}
+                try { sizeChromeIframe(); } catch (_) {}
                 done(true);
               }
             } catch (_) {}
@@ -822,6 +856,7 @@
   global.geckoBack = geckoBack;
   global.geckoReload = geckoReload;
   global.fitGecko = fitGecko;
+  global.sizeChromeIframe = sizeChromeIframe;
   global.geckoReset = geckoReset;
   global.geckoClick = geckoClick;
   global.geckoType = geckoType;
@@ -833,6 +868,12 @@
   global.browserPlaneStatus = browserPlaneStatus;
 
   async function waitForGoarPlanes(ms) {
+    if (String(global.GOAR_GECKO_MODE || "").toLowerCase() === "live") {
+      if (typeof ensureLiveBrowser === "function") {
+        ensureLiveBrowser({ show: false }).catch(() => {});
+      }
+      return typeof liveStatus === "function" ? liveStatus() : { ready: true, mode: "live" };
+    }
     const budget = Math.max(4000, Number(ms) || 40000);
     const t0 = Date.now();
     if (typeof ensureGecko === "function") {
@@ -853,6 +894,7 @@
 
   try {
     const kick = () => {
+      if (String(global.GOAR_GECKO_MODE || "").toLowerCase() === "live") return;
       ensureGecko({
         mode: "embed",
         show: false,

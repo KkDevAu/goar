@@ -209,10 +209,11 @@
         if (sel && s.provider) sel.value = s.provider;
         if (token && s.apiKey) token.value = s.apiKey;
         if (status) {
-          status.textContent = s.apiKey ? "key set" : "no key";
-          status.classList.toggle("ok", !!s.apiKey);
+          const noKey = typeof providerAllowsEmptyKey === "function" ? providerAllowsEmptyKey(s.provider) : !s.apiKey;
+          status.textContent = s.apiKey ? "key set" : (noKey ? "Free.ai demo" : "no key");
+          status.classList.toggle("ok", !!(s.apiKey || noKey));
         }
-        if (s.apiKey && typeof fetchModels === "function") {
+        if ((s.apiKey || (typeof providerAllowsEmptyKey === "function" && providerAllowsEmptyKey(s.provider))) && typeof fetchModels === "function") {
           fetchModels({ provider: s.provider, apiBase: s.apiBase, apiKey: s.apiKey })
             .then((ids) => {
               if (typeof syncInAppProviderBar === "function") {
@@ -234,7 +235,7 @@
           apiBase = (prov && prov.apiBase) || "";
         } catch (_) {}
         if (status) status.textContent = "querying /models…";
-        const ids = apiKey || provider === "ollama"
+        const ids = (apiKey || (typeof providerAllowsEmptyKey === "function" && providerAllowsEmptyKey(provider)) || provider === "ollama")
           ? await fetchModels({ provider, apiBase, apiKey })
           : [];
         let apiModel = "";
@@ -335,7 +336,12 @@
 
   function wireChrome() {
     if (!document.getElementById("drawer-overlay")) {
-      $("#btn-menu")?.addEventListener("click", () => openMenu());
+      $("#btn-history")?.addEventListener("click", () => {
+        if (typeof toggleHistory === "function") toggleHistory();
+      });
+      $("#btn-menu")?.addEventListener("click", () => {
+        if (typeof toggleHistory === "function") toggleHistory();
+      });
       document.getElementById("backdrop")?.addEventListener("click", () => closeMenu());
       document.getElementById("btn-sidebar-close")?.addEventListener("click", () => closeMenu());
       document.getElementById("btn-sidebar-close-foot")?.addEventListener("click", () => closeMenu());

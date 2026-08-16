@@ -66,24 +66,32 @@ async function sendCommand() {
   let msg = (agentEl.input?.value || "").trim();
   const extra = consumeAttachments();
   if (extra) msg = (msg || "Review the attached files.") + extra;
+  if (agentBusy && !msg) {
+    requestAgentStop();
+    return;
+  }
   if (!msg) return;
   if (msg === "/stop" || msg === "/abort") {
     agentEl.input.value = "";
     requestAgentStop();
+    if (typeof paintComposerMode === "function") paintComposerMode();
     return;
   }
-  // Queue one follow-up while a turn runs — never drop the user's intent
+  // Mid-run: inject additional context into the same job (do not start a new turn)
   if (agentBusy) {
     try {
-      window.__GOAR_PENDING_TURN = msg;
+      if (typeof queueSteer === "function") queueSteer(msg);
+      else {
+        window.__GOAR_STEER = window.__GOAR_STEER || [];
+        window.__GOAR_STEER.push(msg);
+      }
       agentEl.input.value = "";
       agentEl.input.style.height = "auto";
       appendMsg(msg, "user");
-      appendMsg("queued — runs when current step finishes", "sys");
-      if (typeof setStatusFooter === "function") setStatusFooter("queued…");
-    } catch (_) {
-      if (typeof setStatusFooter === "function") setStatusFooter("busy — Esc to stop");
-    }
+      if (typeof paintLiveWork === "function") paintLiveWork({ text: "Context added — applying next" });
+      if (typeof setStatusFooter === "function") setStatusFooter("context added");
+      if (typeof paintComposerMode === "function") paintComposerMode();
+    } catch (_) {}
     return;
   }
   agentEl.input.value = "";

@@ -1043,7 +1043,7 @@
               height="56"
             />
             <div class="w-title">What should we do?</div>
-            <div class="w-sub">Ask anything</div>
+            <div class="w-sub">Request Anything</div>
             <div class="w-chips" role="list">
               <div class="w-chip" role="listitem" tabindex="0" data-q="Explore the workspace">Explore</div>
               <div class="w-chip" role="listitem" tabindex="0" data-q="Build something">Build</div>
@@ -1058,6 +1058,11 @@
             <button type="button" id="chat-attach" aria-label="Attach file" title="Attach file">+ File</button>
             <input type="file" id="chat-attach-input" multiple hidden aria-hidden="true" />
           </div>
+          <div id="live-work" hidden>
+            <span class="live-spin" aria-hidden="true"></span>
+            <span id="live-work-text">Thinking</span>
+            <button type="button" id="abortBtn" aria-label="Stop">Stop</button>
+          </div>
           <div class="input-box" role="group" aria-label="Message input">
             <button type="button" id="chat-plus" class="chat-plus-btn" title="Attach" aria-label="Attach file">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1067,7 +1072,7 @@
             <textarea
               id="msg-input"
               rows="1"
-              placeholder="Ask anything"
+              placeholder="Request Anything"
               enterkeyhint="send"
               aria-label="Message"
               aria-multiline="true"

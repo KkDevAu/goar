@@ -62,7 +62,7 @@ function resolveChatBody(s, messages, tools, stream, includeTools) {
     body.tool_choice = "auto";
     const provider = s.provider || detectProvider(s.apiBase);
     const base = normalizeApiBase(s.apiBase || DEFAULTS.apiBase, provider);
-    if (/openrouter|openai|groq|nvidia|together|deepseek|fireworks|deepinfra/i.test(base + provider)) {
+    if (/openrouter|openai|groq|nvidia|together|deepseek|fireworks|deepinfra|free\.ai|freeai/i.test(base + provider)) {
       body.parallel_tool_calls = false;
     }
   }
@@ -120,7 +120,14 @@ async function openaiChat({ messages, tools, stream = false, includeTools = true
         continue;
       }
       if (resp.status >= 500 && resp.status <= 599) {
+        if (/model is restarting|please resend/i.test(errText)) {
+          if (typeof paintLiveWork === "function") paintLiveWork({ text: "Model restarting — retrying" });
+        }
         await sleep((attempt + 1) * 2000);
+        continue;
+      }
+      if (/model is restarting|please resend in a few seconds/i.test(errText)) {
+        await sleep((attempt + 1) * 1800);
         continue;
       }
       throw new Error(lastErr);
@@ -153,9 +160,23 @@ async function fetchModels(override) {
     throw new Error("models HTTP " + resp.status + (body ? " · " + body.slice(0, 160) : ""));
   }
   const data = await resp.json();
-  const arr = data.data || data.models || [];
+  let arr = data.data || data.models || [];
+  const p = typeof getProvider === "function" ? getProvider(provider) : null;
+  if (p && Array.isArray(p.chatModelTypes) && p.chatModelTypes.length) {
+    const allow = new Set(p.chatModelTypes);
+    const typed = arr.filter((x) => !x || typeof x === "string" || !x.type || allow.has(x.type));
+    if (typed.length) arr = typed;
+  }
   const ids = arr.map((x) => (typeof x === "string" ? x : (x.id || x.name || ""))).filter(Boolean);
-  return [...new Set(ids)].sort();
+  let uniq = [...new Set(ids)];
+  if (p && Array.isArray(p.preferredModels)) {
+    const pref = p.preferredModels.filter((id) => uniq.includes(id));
+    const rest = uniq.filter((id) => !pref.includes(id)).sort();
+    uniq = pref.concat(rest);
+  } else {
+    uniq.sort();
+  }
+  return uniq;
 }
 
 /** GoarClient.probeModel — reachability + tool capability (one cheap call) */

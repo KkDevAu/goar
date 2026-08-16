@@ -5,6 +5,7 @@
 /** Production networking: WISP (full TCP/HTTPS). Override window.GOAR_WISP_URL */
 const NET_RELAYS = [
   (typeof window !== "undefined" && window.GOAR_WISP_URL) || null,
+  "wss://cors.manus.space/wisp/",
   "wss://wisp.mercurywork.shop/",
 ].filter(Boolean).map(function (u) {
   u = String(u || "").trim();

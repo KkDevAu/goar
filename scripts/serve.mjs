@@ -269,7 +269,7 @@ const server = http.createServer(async (req, res) => {
     const ext = path.extname(file).toLowerCase();
     const headers = {
       "content-type": MIME[ext] || "application/octet-stream",
-      "cache-control": ext === ".html" || ext === ".js" ? "no-cache" : "public, max-age=3600",
+      "cache-control": ext === ".html" || ext === ".js" || ext === ".css" || ext === ".zip" ? "no-cache" : "public, max-age=3600",
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "credentialless",
       "Cross-Origin-Resource-Policy": "cross-origin",

@@ -12,8 +12,12 @@ function wireAgentUi() {
     const el = agentEl.input;
     el.style.height = "auto";
     el.style.height = Math.min(140, el.scrollHeight) + "px";
+    if (typeof paintComposerMode === "function") paintComposerMode();
   });
-  document.getElementById("abortBtn")?.addEventListener("click", () => requestAgentStop());
+  document.getElementById("abortBtn")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    requestAgentStop();
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && agentBusy) requestAgentStop();
   });
@@ -29,6 +33,6 @@ function wireAgentUi() {
     updateStatusBar({});
   }
   agentBoot(""); updateStatusBar({ status: "starting" });
+  if (typeof paintComposerMode === "function") paintComposerMode();
   setTimeout(() => { try { agentEl.input?.focus(); } catch (_) {} }, 200);
 }
-

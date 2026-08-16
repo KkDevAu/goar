@@ -29,6 +29,7 @@
   "net/page-plane.js",
   "net/eruda-plane.js",
   "net/gecko-plane.js",
+  "net/live-browser.js",
   "net/gecko-menu.js",
   "net/gecko-features.js",
 

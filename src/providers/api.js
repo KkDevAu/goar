@@ -1,3 +1,14 @@
+function providerNeedsKey(p) {
+  if (!p) return true;
+  if (p.requiresApiKey === false || p.supportsOptionalApiKey || p.noKeyDemo) return false;
+  return true;
+}
+
+function providerAllowsEmptyKey(idOrP) {
+  const p = typeof idOrP === "string" ? getProvider(idOrP) : idOrP;
+  return !providerNeedsKey(p);
+}
+
 function getProvider(id) {
   if (!id) return null;
   const key = String(id).trim().toLowerCase().replace(/\s+/g, "");
@@ -11,6 +22,7 @@ function getProvider(id) {
 function providerByBase(base) {
   const b = (base || "").toLowerCase();
   if (!b) return getProvider("openai-compatible");
+  if (b.includes("free.ai")) return getProvider("freeai");
   if (b.includes("nvidia.com")) return getProvider("nvidia");
   if (b.includes("openai.com")) return getProvider("openai");
   if (b.includes("deepseek.com")) return getProvider("deepseek");
@@ -90,10 +102,10 @@ const SETTINGS_KEY = "goar.workspace.settings.v7-providers";
 const LS_KEY = SETTINGS_KEY;
 
 const DEFAULTS = {
-  provider: "openrouter",
+  provider: "freeai",
   wispUrl: "",
-  apiBase: "https://openrouter.ai/api/v1",
-  apiModel: "",
+  apiBase: "https://api.free.ai/v1",
+  apiModel: "qwen7b",
   apiKey: "",
   customDns: "",
   temperature: 0.2,

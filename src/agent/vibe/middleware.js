@@ -54,7 +54,9 @@ async function runVibeBeforeTurn() {
 registerVibeMiddleware({
   name: "abort",
   async beforeTurn(ctx) {
-    if (ctx.abort) return { action: MiddlewareAction.STOP, reason: "abort" };
+    if (ctx.abort && !(window.__GOAR_STEER || []).length) {
+      return { action: MiddlewareAction.STOP, reason: "abort" };
+    }
     return { action: MiddlewareAction.CONTINUE };
   },
 });

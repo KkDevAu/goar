@@ -25,8 +25,12 @@ const MANUS_LS = "pyodide_security_manus_api_key";
 const MANUS_LS_LEGACY = "goar_manus_key";
 
 const DEFAULT_WISP_POOL = [
+  "wss://cors.manus.space/wisp/",
   "wss://wisp.mercurywork.shop/",
 ];
+const MANUS_ORIGIN = (typeof window !== "undefined" && window.GOAR_MANUS_ORIGIN) || "https://cors.manus.space";
+const MANUS_PROXY = (typeof window !== "undefined" && window.GOAR_CORS_PROXY) || (MANUS_ORIGIN + "/api/proxy");
+
 
 const CORS_RELAYS = [
   { id: "allorigins", wrap: (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u) },
@@ -158,6 +162,7 @@ async function ensureMwFabric(opts) {
     try {
       await loadLibcurlEngine(wisp);
       MW_FABRIC.ready = true;
+      try { await mintManusKey(); } catch (_) {}
       await probeMwFabric();
       console.log("[goar] fabric ready via", MW_FABRIC.engine, wisp);
       return mwFabricStatus();
@@ -213,6 +218,79 @@ function persistManusKey(key) {
       saveSettings(s);
     }
   } catch (_) {}
+}
+
+async function mintManusKey() {
+  const have = readManusKey();
+  if (have && /^cpx_/.test(have)) return have;
+  const body = JSON.stringify({ json: { label: "goar" } });
+  const url = MANUS_ORIGIN + "/api/trpc/apiKey.generate";
+  async function parseKey(text) {
+    try {
+      const j = JSON.parse(text);
+      return (
+        j &&
+        j.result &&
+        j.result.data &&
+        j.result.data.json &&
+        j.result.data.json.key
+      ) || "";
+    } catch (_) {
+      return "";
+    }
+  }
+  try {
+    if (MW_FABRIC.libcurl && MW_FABRIC.libcurl.fetch) {
+      const res = await MW_FABRIC.libcurl.fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body,
+      });
+      const key = await parseKey(await res.text());
+      if (key) {
+        persistManusKey(String(key));
+        return String(key);
+      }
+    }
+  } catch (e) {
+    console.warn("[goar] manus key mint via wisp", e);
+  }
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body,
+    });
+    const key = await parseKey(await r.text());
+    if (key) {
+      persistManusKey(String(key));
+      return String(key);
+    }
+  } catch (e) {
+    console.warn("[goar] manus key mint", e);
+  }
+  return have || "";
+}
+
+async function manusHttpFetch(url, opts) {
+  opts = opts || {};
+  const key = await mintManusKey();
+  if (!key) return null;
+  const method = String(opts.method || "GET").toUpperCase();
+  const target = MANUS_PROXY.replace(/\/$/, "") + "/" + String(url).replace(/^\/+/, "");
+  const headers = Object.assign({}, opts.headers || {}, { "x-api-key": key });
+  const init = { method, headers };
+  if (opts.body != null && method !== "GET" && method !== "HEAD") init.body = opts.body;
+  const res = await fetch(target, init);
+  const text = await res.text();
+  return {
+    ok: res.status >= 200 && res.status < 400,
+    status: res.status,
+    headers: { "content-type": res.headers.get("content-type") || "" },
+    body: text,
+    via: "manus-proxy",
+    url,
+  };
 }
 
 function readManusKey() {
@@ -336,6 +414,17 @@ async function goarHostFetch(url, opts) {
   }
 
   try {
+    const man = await manusHttpFetch(url, { method, headers, body });
+    if (man && man.body) {
+      man.body = String(man.body).slice(0, maxBytes);
+      man.ms = Math.round(performance.now() - t0);
+      return man;
+    }
+  } catch (e) {
+    MW_FABRIC.lastError = String(e && e.message ? e.message : e);
+  }
+
+  try {
     const origin = typeof location !== "undefined" ? location.origin : "";
     if (origin) {
       const proxyUrl =
@@ -438,6 +527,8 @@ try {
   window.probeWisp = probeWisp;
   window.readManusKey = readManusKey;
   window.persistManusKey = persistManusKey;
+  window.mintManusKey = mintManusKey;
+  window.manusHttpFetch = manusHttpFetch;
 } catch (_) {}
 
 try { window.goarLoopbackFetch = goarLoopbackFetch; } catch (_) {}

@@ -21,7 +21,7 @@ async function agentTurn(userText) {
   recentToolFingerprints = [];
   pathActionCounts = Object.create(null);
   agentTurn._loopSteps = 0;
-  if (agentEl.send) agentEl.send.disabled = true;
+  if (typeof paintComposerMode === "function") paintComposerMode();
   const t0 = performance.now();
   let toolCount = 0;
   let step = 0;
@@ -93,9 +93,23 @@ async function agentTurn(userText) {
     let finishedClean = false;
 
     step = -1;
-    while (!agentAbort) {
+    while (!agentAbort || (typeof drainSteers === "function" && (window.__GOAR_STEER || []).length)) {
       step++;
       if (step >= stepBudget && waves + 1 >= maxWaves) break;
+
+      // Apply mid-run user context before the next model call
+      try {
+        const steers = typeof drainSteers === "function" ? drainSteers() : [];
+        if (steers.length) {
+          const block = typeof formatSteer === "function" ? formatSteer(steers) : steers.join("\n\n");
+          agentHistory.push({ role: "user", content: block });
+          if (typeof paintLiveWork === "function") paintLiveWork({ text: "Applying your note" });
+          agentAbort = false;
+          if (!agentAbortController || agentAbortController.signal.aborted) {
+            agentAbortController = new AbortController();
+          }
+        }
+      } catch (_) {}
 
       if (agentAbort) {
         appendMsg("Stopped.", "sys");
@@ -181,6 +195,25 @@ async function agentTurn(userText) {
         result = typeof vibeCallModel === "function" ? await vibeCallModel(call, { lastUsage }) : await call();
       } catch (e) {
         const msg = String(e && e.message ? e.message : e);
+        if (agentAbort || (e && e.name === "AbortError")) {
+          const steers = typeof drainSteers === "function" ? drainSteers() : [];
+          if (steers.length) {
+            agentAbort = false;
+            agentAbortController = new AbortController();
+            const block = typeof formatSteer === "function" ? formatSteer(steers) : steers.join("\n\n");
+            agentHistory.push({ role: "user", content: block });
+            if (typeof paintLiveWork === "function") paintLiveWork({ text: "Applying your note" });
+            continue;
+          }
+          appendMsg("Stopped.", "sys");
+          break;
+        }
+        if (/model is restarting|please resend|temporarily unavailable|overloaded|try again in a few/i.test(msg)) {
+          if (typeof paintLiveWork === "function") paintLiveWork({ text: "Model restarting — retrying" });
+          if (typeof setStatusFooter === "function") setStatusFooter("model restarting · retrying");
+          await new Promise((r) => setTimeout(r, 1800));
+          continue;
+        }
         if (/context.?too.?long|maximum context|prompt is too long|reduce the length/i.test(msg)) {
           if (typeof maybeCompactAgentHistoryAsync === "function") {
             await maybeCompactAgentHistoryAsync({ force: true, lastUsage });
@@ -197,6 +230,15 @@ async function agentTurn(userText) {
       endStreamMsg(aiRef);
 
       if (agentAbort) {
+        const steers = typeof drainSteers === "function" ? drainSteers() : [];
+        if (steers.length) {
+          agentAbort = false;
+          agentAbortController = new AbortController();
+          const block = typeof formatSteer === "function" ? formatSteer(steers) : steers.join("\n\n");
+          agentHistory.push({ role: "user", content: block });
+          if (typeof paintLiveWork === "function") paintLiveWork({ text: "Applying your note" });
+          continue;
+        }
         appendMsg("Stopped.", "sys");
         break;
       }
@@ -205,6 +247,12 @@ async function agentTurn(userText) {
       const finish = result.finish_reason || "";
       const content = collapseDoubledWords(result.text || textFull || "");
       const thinking = collapseDoubledWords(result.thinking || thinkingFull || "");
+      if (!toolCalls.length && /model is restarting|please resend in a few seconds/i.test(content || thinking)) {
+        if (typeof paintLiveWork === "function") paintLiveWork({ text: "Model restarting — retrying" });
+        if (typeof setStatusFooter === "function") setStatusFooter("model restarting · retrying");
+        await new Promise((r) => setTimeout(r, 1800));
+        continue;
+      }
       if (result.usage) {
         lastUsage = result.usage;
         accumulateUsage(result.usage);
@@ -288,10 +336,12 @@ async function agentTurn(userText) {
 
           appendMsg(summary, "tool-run");
           toolCount++;
-          try { syncIndicators({ phase: "tool", tool: name }); } catch (_) {}
+          try { window.__GOAR_LAST_TOOL_LABEL = summary; } catch (_) {}
+          try { syncIndicators({ phase: "tool", tool: summary }); } catch (_) {}
+          if (typeof paintLiveWork === "function") paintLiveWork({ text: summary });
           if (typeof agentState !== "undefined") agentState.lastTool = name;
-          if (typeof setStatusFooter === "function") setStatusFooter("* " + name + "  step " + (step + 1));
-          setRunningUI(true, name + "...");
+          if (typeof setStatusFooter === "function") setStatusFooter(summary);
+          setRunningUI(true, summary);
 
           let out = "";
           try {
@@ -379,7 +429,7 @@ async function agentTurn(userText) {
               "Continue the PRIMARY USER REQUEST — do not restart. Tools stay available.",
           });
           try {
-            appendMsg("wave " + (waves + 1) + " · same mission (context compacted, not reset)", "sys");
+            appendMsg("wave " + (waves + 1) + " · same mission", "sys");
           } catch (_) {}
         }
         continue;
@@ -480,7 +530,7 @@ async function agentTurn(userText) {
     agentBusy = false;
     agentAbort = false;
     agentAbortController = null;
-    if (agentEl.send) agentEl.send.disabled = false;
+    if (typeof paintComposerMode === "function") paintComposerMode();
     agentEl.input?.focus();
     setRunningUI(false, "");
     const ms = Math.round(performance.now() - t0);
@@ -502,9 +552,12 @@ async function agentTurn(userText) {
     if (typeof setStatusFooter === "function") setStatusFooter(foot);
     if (typeof refreshAgentPill === "function") refreshAgentPill();
     try { persistAgentChat(); } catch (_) {}
-    // Drain one queued user message (logical continuous chat)
+    // Drain leftover steer as a follow-up turn only if the run fully ended
     try {
-      const pending = window.__GOAR_PENDING_TURN;
+      const leftover = typeof drainSteers === "function" ? drainSteers() : [];
+      const pending = leftover.length
+        ? leftover.join("\n\n")
+        : (window.__GOAR_PENDING_TURN || "");
       window.__GOAR_PENDING_TURN = "";
       if (pending && String(pending).trim()) {
         setTimeout(() => {

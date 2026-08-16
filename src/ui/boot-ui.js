@@ -111,7 +111,7 @@ function showCredPhase() {
     const p = document.getElementById("credProvider");
     const k = document.getElementById("credKey");
     const b = document.getElementById("credBase");
-    fillProviderSelect(p, s.provider || detectProvider(s.apiBase) || "openrouter");
+    fillProviderSelect(p, s.provider || detectProvider(s.apiBase) || "freeai");
     fillProviderSelect(document.getElementById("provider-select"), s.provider);
     if (k) {
       k.value = s.apiKey || "";
@@ -120,12 +120,14 @@ function showCredPhase() {
     }
     if (b) b.value = s.apiBase || "";
     applyCredProvider();
-    if (s.apiKey || (p && p.value === "ollama")) {
+    const prov = getProvider(p && p.value);
+    const noKey = typeof providerAllowsEmptyKey === "function" ? providerAllowsEmptyKey(prov) : !!(prov && !providerNeedsKey(prov));
+    if (s.apiKey || noKey) {
       loadModelsInto(document.getElementById("credModel"), {
         provider: (p && p.value) || s.provider,
         apiBase: (b && b.value) || s.apiBase,
         apiKey: (k && k.value) || s.apiKey,
-        apiModel: s.apiModel || "",
+        apiModel: s.apiModel || (prov && prov.defaultModel) || "",
       }).catch(() => {});
     } else {
       setCredReady(false, "Paste a key to list models");
@@ -150,6 +152,15 @@ function applyCredProvider() {
   if (b) b.readOnly = !custom && !!(prov && prov.apiBase);
   if (wrap) wrap.style.display = custom || !(prov && prov.apiBase) ? "" : "none";
   if (k && prov) k.placeholder = prov.placeholder || "Paste API key";
+  const keyWrap = document.getElementById("credKeyWrap");
+  const noKey = typeof providerAllowsEmptyKey === "function" ? providerAllowsEmptyKey(prov) : !!(prov && !providerNeedsKey(prov));
+  if (keyWrap) keyWrap.style.display = noKey ? "none" : "";
+  const hint = document.querySelector("#credPhase .hint");
+  if (hint) {
+    hint.textContent = noKey
+      ? "Free.ai demo · 30k tokens/day · no key · switch provider anytime"
+      : "Provider + API key · models load live from your API";
+  }
 }
 
 /**
@@ -192,7 +203,7 @@ async function loadModelsInto(sel, s) {
     try { fillModelSelect(ids, prefer, "live"); } catch (_) {}
     syncInAppProviderBar(s.provider, s.apiKey, prefer, ids);
     reflectActiveModel(prefer, s.provider);
-    setCredReady(true, ids.length + " models · key valid");
+    setCredReady(true, ids.length + " models" + (s.apiKey ? " · key valid" : " · no key"));
     return ids;
   } catch (e) {
     sel.innerHTML = "";
@@ -236,8 +247,11 @@ function syncInAppProviderBar(provider, apiKey, apiModel, ids) {
       }
     }
     if (status) {
-      status.textContent = apiKey ? ((ids && ids.length ? ids.length + " models" : "key set")) : "no key";
-      status.classList.toggle("ok", !!apiKey);
+      const noKey = typeof providerAllowsEmptyKey === "function" ? providerAllowsEmptyKey(provider) : !apiKey;
+      status.textContent = apiKey
+        ? (ids && ids.length ? ids.length + " models" : "key set")
+        : (noKey ? (ids && ids.length ? ids.length + " models · demo" : "Free.ai demo") : "no key");
+      status.classList.toggle("ok", !!(apiKey || noKey));
     }
   } catch (_) {}
 }
@@ -257,7 +271,7 @@ async function enterChatFromCreds() {
     setCredReady(false, "Pick a provider");
     return;
   }
-  if (!apiKey && prov && prov.requiresApiKey !== false && provider !== "ollama") {
+  if (!apiKey && (typeof providerNeedsKey === "function" ? providerNeedsKey(prov) : !!(prov && prov.requiresApiKey !== false && provider !== "ollama"))) {
     setCredReady(false, "API key required");
     return;
   }
@@ -293,6 +307,7 @@ async function enterChatFromCreds() {
 function finishEnterChat() {
   const after = () => {
     try { document.body.classList.add("goar-ready"); } catch (_) {}
+    try { if (typeof goarShowView === "function") goarShowView("chat"); } catch (_) {}
     try { el.app.classList.add("show"); } catch (_) {}
     try { document.dispatchEvent(new CustomEvent("goar:ready")); } catch (_) {}
     try { enableAgentMode(); } catch (_) {}
@@ -324,7 +339,13 @@ function finishEnterChat() {
         }
       }
     } catch (_) {}
-    try { if (typeof geckoShow === "function") geckoShow(); } catch (_) {}
+    try {
+      if (typeof ensureGecko === "function") {
+        ensureGecko({ show: false }).catch(() => {});
+      } else if (typeof ensureLiveBrowser === "function") {
+        ensureLiveBrowser({ show: false }).catch(() => {});
+      }
+    } catch (_) {}
     try { if (typeof goarMotion !== "undefined" && goarMotion.enterStage) goarMotion.enterStage(); } catch (_) {}
   };
 

@@ -18,9 +18,9 @@
 
 const GOAR_COMPACTION = {
   /** ~ADK token_threshold — when prompt est. exceeds this, compact older events */
-  tokenThreshold: 3500,
+  tokenThreshold: 5200,
   /** Keep last N non-system messages raw after a compaction */
-  eventRetentionSize: 10,
+  eventRetentionSize: 14,
   /** ADK overlap_size: re-include this many trailing events from the compacted range */
   overlapSize: 4,
   /** Cap each tool payload in summaries (ADK _MAX_TOOL_CONTENT_CHARS = 2000) */
@@ -348,11 +348,8 @@ function maybeCompactAgentHistory(opts) {
 
   const tokensAfter = estimatePromptTokens(agentHistory);
   try {
-    if (typeof appendMsg === "function") {
-      appendMsg(
-        "context compacted  ~" + tokensBefore + "→" + tokensAfter + " tok  (kept last " + keep.length + " events)",
-        "sys"
-      );
+    if (typeof paintLiveWork === "function") {
+      paintLiveWork({ text: "Keeping context lean" });
     }
   } catch (_) {}
   if (typeof paintTokenMeter === "function") {
@@ -414,8 +411,8 @@ async function maybeCompactAgentHistoryAsync(opts) {
   agentHistory = sys ? [sys, compactMsg].concat(keep) : [compactMsg].concat(keep);
   const tokensAfter = estimatePromptTokens(agentHistory);
   try {
-    if (typeof appendMsg === "function") {
-      appendMsg("context compacted  ~" + tokens + "→" + tokensAfter + " tok  (llm+rolling)", "sys");
+    if (typeof paintLiveWork === "function") {
+      paintLiveWork({ text: "Keeping context lean" });
     }
   } catch (_) {}
   if (typeof paintTokenMeter === "function") {

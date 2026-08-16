@@ -168,13 +168,20 @@ json.dumps(r)
     }
   }
 
-  // Decide base_url: local mint → /api/cors-proxy; real Manus key → default Manus
-  let baseUrl = "https://cors.manus.space/api/proxy";
-  const isLocalKey = !!(key && (key.startsWith("goar_") || (mintMeta && mintMeta.source === "local") || (mintMeta && mintMeta.proxyBase)));
+  // Decide base_url: minted Manus key → cors.manus.space; local goar_ → same-origin
+  let baseUrl = (typeof window !== "undefined" && window.GOAR_CORS_PROXY) || "https://cors.manus.space/api/proxy";
+  if (!key) {
+    try {
+      if (typeof mintManusKey === "function") {
+        key = await mintManusKey();
+        if (key) source = "manus-mint";
+      }
+    } catch (_) {}
+  }
+  const isLocalKey = !!(key && key.startsWith("goar_"));
   if (isLocalKey && origin) {
     baseUrl = origin + "/api/cors-proxy";
   } else if (!key && origin) {
-    // Open local proxy with synthetic key even if mint endpoint missing
     key = "goar_open";
     baseUrl = origin + "/api/cors-proxy";
     source = "local-open";

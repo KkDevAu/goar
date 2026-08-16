@@ -5,9 +5,18 @@ function loadSettings() {
     // Fill gaps only — never replace a user-set OpenAI-compatible provider
     /* no default API key — user must supply */
     if (!s.apiBase) s.apiBase = DEFAULTS.apiBase;
-    if (s.apiModel == null) s.apiModel = "";
-    // never invent a hardcoded model — live /models only
+    if (s.apiModel == null || s.apiModel === "") s.apiModel = DEFAULTS.apiModel || "";
     if (!s.provider) s.provider = detectProvider(s.apiBase) || DEFAULTS.provider;
+    // First-run / empty-key users land on Free.ai so chat works with no key
+    if (!(s.apiKey || "").trim()) {
+      const p = typeof getProvider === "function" ? getProvider(s.provider) : null;
+      const needs = typeof providerNeedsKey === "function" ? providerNeedsKey(p) : (p && p.requiresApiKey);
+      if (!p || needs) {
+        s.provider = "freeai";
+        s.apiBase = "https://api.free.ai/v1";
+        if (!s.apiModel) s.apiModel = "qwen7b";
+      }
+    }
     if (s.customDns == null) s.customDns = DEFAULTS.customDns || "";
     if (!s.wispUrl) s.wispUrl = (typeof window !== "undefined" && window.GOAR_WISP_URL) || DEFAULTS.wispUrl || "";
     return s;
@@ -75,9 +84,9 @@ function ensureDefaultSettings() {
   try { s = loadSettings() || {}; } catch (_) { s = {}; }
   // v6 factory: OpenRouter free tool models + provided key
   const out = {
-    provider: s.provider || DEFAULTS.provider || "openrouter",
+    provider: s.provider || DEFAULTS.provider || "freeai",
     apiBase: (s.apiBase || "").trim() || DEFAULTS.apiBase,
-    apiModel: (s.apiModel || "").trim(),
+    apiModel: (s.apiModel || "").trim() || DEFAULTS.apiModel || "qwen7b",
     wispUrl: "",
       apiKey: (s.apiKey || "").trim(),
     customDns: (s.customDns || "").trim() || DEFAULTS.customDns || "",

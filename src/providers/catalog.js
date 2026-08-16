@@ -1,5 +1,21 @@
 const SERVICE_PROVIDERS = [
   {
+    id: "freeai",
+    displayName: "Free.ai (demo)",
+    requiresApiKey: false,
+    supportsOptionalApiKey: true,
+    defaultModel: "qwen7b",
+    apiBase: "https://api.free.ai/v1",
+    apiKeyUrl: "https://free.ai/",
+    placeholder: "optional — 30k tokens/day with no key",
+    supportsTools: true,
+    supportsStreaming: true,
+    contextWindowTokens: 32768,
+    noKeyDemo: true,
+    chatModelTypes: ["chat", "code"],
+    preferredModels: ["qwen7b", "qwen-coder"],
+  },
+  {
     id: "nvidia",
     displayName: "NVIDIA NIM",
     requiresApiKey: true,

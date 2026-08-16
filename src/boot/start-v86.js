@@ -183,8 +183,12 @@ async function afterEnvReady() {
   let keyed = false;
   try {
     const s = typeof settingsSnapshot === "function" ? settingsSnapshot() : {};
-    keyed = !!(s.apiKey && String(s.apiKey).trim() && s.apiModel);
-    if (!keyed && s.provider === "ollama") keyed = !!s.apiModel;
+    const p = typeof getProvider === "function" ? getProvider(s.provider) : null;
+    const noKey = typeof providerAllowsEmptyKey === "function" ? providerAllowsEmptyKey(p) : (s.provider === "ollama" || s.provider === "freeai");
+    keyed = !!((s.apiModel || (p && p.defaultModel)) && ((s.apiKey && String(s.apiKey).trim()) || noKey));
+    if (keyed && !s.apiModel && p && p.defaultModel) {
+      try { saveSettings({ apiModel: p.defaultModel, provider: s.provider || "freeai", apiBase: s.apiBase || (p && p.apiBase) }); } catch (_) {}
+    }
   } catch (_) {}
   if (keyed && typeof finishEnterChat === "function") finishEnterChat();
   else showCredPhase();

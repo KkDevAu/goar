@@ -212,6 +212,7 @@ function syncIndicators(patch) {
     kitEl.dataset.state = __ind.kit;
   }
   if (mid) mid.textContent = __ind.phase === "idle" ? "" : (__ind.phase === "tool" ? __ind.tool : __ind.phase);
+  try { if (typeof paintLiveWork === "function") paintLiveWork(); } catch (_) {}
 }
 
 /** @deprecated use syncIndicators */
@@ -462,12 +463,13 @@ function formatToolOut(text) {
   try {
     const j = JSON.parse(raw);
     const ok = j.ok !== false && !j.error;
-    const title = j.tool_id || j.agent_toolkit || j.action || "tool";
+    let title = j.tool_id || j.agent_toolkit || j.action || "";
+    if (!title || title === "tool" || title === "Output") title = "";
     const body = j.result !== undefined ? j.result : (j.error || j);
     const pretty = typeof body === "string" ? body : JSON.stringify(body, null, 2);
     return { title: String(title), ok: ok, body: pretty.slice(0, 8000) };
   } catch (_) {
-    return { title: "Output", ok: true, body: raw.slice(0, 8000) };
+    return { title: "", ok: true, body: raw.slice(0, 8000) };
   }
 }
 
@@ -514,7 +516,9 @@ function appendMsg(text, kind = "ai") {
     div.appendChild(fold);
     body.classList.add("fold-body");
     const fmt = formatToolOut(text);
-    fold.textContent = (fmt.ok ? "Output · " : "Failed · ") + fmt.title;
+    fold.textContent = fmt.title
+      ? ((fmt.ok ? "" : "Failed · ") + fmt.title)
+      : (fmt.ok ? "Output" : "Failed");
     body.classList.add("fold-body");
     body.innerHTML = '<pre>' + escHtml(fmt.body) + "</pre>";
     body.addEventListener("click", () => {
