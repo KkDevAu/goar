@@ -26,10 +26,44 @@ function initTerm() {
   term.open(termMount);
   try { fitAddon.fit(); } catch (_) {}
   // xterm → serial: Linux line discipline wants LF; map CR→LF
+  let _typed = "";
   term.onData((data) => {
+    if (window.__GOAR_UNIX && typeof unixOnData === "function") {
+      unixOnData(data);
+      return;
+    }
     const emu = emulator || window.__emulator;
     const send = window.__serialSend || (emu && function (s) { emu.serial0_send(s); });
     if (!send) return;
+    if (data === "\r" || data === "\n") {
+      const line = _typed.trim();
+      _typed = "";
+      const pip = line.match(/^(?:sudo\s+)?(?:python3?\s+-m\s+)?pip3?\s+install\s+(.+)$/i);
+      if (pip && typeof guestPipInstall === "function") {
+        try { send("\u0003"); } catch (_) {}
+        try { term.write("\r\n\x1b[90minstalling " + pip[1].trim() + " …\x1b[0m\r\n"); } catch (_) {}
+        guestPipInstall(pip[1].trim()).then(function (r) {
+          const body = String((r && (r.output || r.error)) || JSON.stringify(r) || "").replace(/\n/g, "\r\n");
+          try {
+            term.write((r && r.ok ? "\x1b[32m" : "\x1b[31m") + (r && r.via ? r.via : "") + "\x1b[0m\r\n");
+            term.write(body.slice(0, 6000) + "\r\n");
+          } catch (_) {}
+          try { send("\r"); } catch (_) {}
+        }).catch(function (e) {
+          try { term.write("\x1b[31m" + String(e && e.message ? e.message : e) + "\x1b[0m\r\n"); } catch (_) {}
+          try { send("\r"); } catch (_) {}
+        });
+        return;
+      }
+    } else if (data === "\u007f" || data === "\b") {
+      _typed = _typed.slice(0, -1);
+    } else if (data === "\u0003" || data === "\u0015") {
+      _typed = "";
+    } else if (data.length === 1 && data >= " ") {
+      _typed += data;
+    } else if (data.length > 1 && data.indexOf("\x1b") < 0) {
+      _typed += data;
+    }
     try {
       send(String(data).replace(/\r\n/g, "\r").replace(/\n/g, "\r"));
     } catch (_) {}
@@ -112,11 +146,32 @@ function attachTermView() {
     stage.addEventListener("pointerdown", () => focusLiveTerm());
   }
   try {
-    const up = (typeof envReady !== "undefined" && envReady) || window.__GOAR_ENV_READY || window.__emulator;
+    const up = (typeof envReady !== "undefined" && envReady) || window.__GOAR_ENV_READY || window.__emulator || window.__GOAR_UNIX;
+    if (up && typeof markTermReady === "function") markTermReady();
+    if (up && window.__GOAR_UNIX) {
+      if (!window.__GOAR_TERM_HINT && term && term.write) {
+        window.__GOAR_TERM_HINT = true;
+      }
+      return;
+    }
     if (up && typeof markTermReady === "function") markTermReady();
     if (up && typeof fixGuestTty === "function") {
       window.__ttyFixed = false;
       fixGuestTty();
+    }
+    try {
+      const emu = window.__emulator || (typeof emulator !== "undefined" ? emulator : null);
+      if (emu && emu.serial0_send) {
+        emu.serial0_send("stty sane echo icanon icrnl opost onlcr 2>/dev/null; echo\n");
+      }
+    } catch (_) {}
+    if (up && !window.__GOAR_TERM_HINT && term && term.write) {
+      window.__GOAR_TERM_HINT = true;
+      term.write("\r\n\x1b[90munix  ·  python3  ·  pip install <pkg>\x1b[0m\r\n");
+    }
+    if (up && typeof ensureGuestNet === "function" && !window.__GOAR_TERM_NET) {
+      window.__GOAR_TERM_NET = true;
+      ensureGuestNet().catch(function () {});
     }
   } catch (_) {}
 }

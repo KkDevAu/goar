@@ -6,7 +6,6 @@
 const NET_RELAYS = [
   (typeof window !== "undefined" && window.GOAR_WISP_URL) || null,
   "wss://cors.manus.space/wisp/",
-  "wss://wisp.mercurywork.shop/",
 ].filter(Boolean).map(function (u) {
   u = String(u || "").trim();
   if (u.startsWith("wisps://")) u = "wss://" + u.slice(8);

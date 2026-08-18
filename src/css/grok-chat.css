@@ -671,7 +671,7 @@ body.view-computer #msg-input { pointer-events: none; }
   max-width: 58ch;
 }
 #chat-inner .msg.thought.streaming .fold { color: #b4b4b7; }
-#chat-inner .msg.thought.streaming .fold-body { display: block; opacity: .72; }
+#chat-inner .msg.thought.streaming .fold-body { display: none; }
 
 #chat-inner .msg.thought.ack .fold-body { display: none; }
 #chat-inner .ack-dots {
@@ -716,6 +716,45 @@ body.view-computer #msg-input { pointer-events: none; }
 }
 #chat-inner .msg.tool-out .fold:hover { color: #c8c8cb; }
 #chat-inner .msg.tool-out.collapsed .fold-body { display: none; }
+
+#chat-inner .msg.preview {
+  margin: 4px 0 12px;
+  max-width: 62ch;
+}
+#chat-inner .preview-frame {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border: 1px solid #2c2d31;
+  border-radius: 10px;
+  background: #fff;
+}
+#chat-inner .preview-img {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid #2c2d31;
+  border-radius: 10px;
+  background: #111;
+}
+#chat-inner .preview-code {
+  margin: 0;
+  padding: 10px 12px;
+  font: 12px/1.45 "JetBrains Mono", ui-monospace, monospace;
+  color: #c8c8cb;
+  background: #161618;
+  border: 1px solid #2c2d31;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow: auto;
+}
+#chat-inner .preview-cap {
+  margin-top: 6px;
+  font: 11px/1.4 Inter, system-ui, sans-serif;
+  color: #6d6d70;
+}
 
 @media (max-width: 768px) {
   #shell { flex-direction: row !important; }

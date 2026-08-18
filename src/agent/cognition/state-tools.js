@@ -32,7 +32,7 @@ function getStateContext() {
   const parts = [];
   if (agentState.mission) {
     parts.push("MISSION: " + agentState.mission);
-    if (agentState.wave > 0) parts.push("WAVE: " + (agentState.wave + 1) + " (same mission, context may be compacted)");
+    if (agentState.wave > 0) parts.push("WAVE: " + (agentState.wave + 1) + " (same mission, keep going)");
   }
   if (agentState.compactionSummary) {
     parts.push("HAS_ROLLING_CONTEXT: yes (" + String(agentState.compactionSummary).length + " chars)");
@@ -473,12 +473,50 @@ function formatToolOut(text) {
   }
 }
 
+function isStagingProse(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  if (t.length > 280) return false;
+  return /^(i(?:'ll| will)|let me|i(?:'m| am) (?:going to |about to )?|now i(?:'ll| will)|next[,:]?\s|here(?:'s| is) (?:a |the )?(?:tiny |quick |small )?|this will|i(?:'m| am) (?:now )?(?:write|creat|open|build|check|run|fetch|brows|scan|add|updat|fix|read|edit|mak))/i.test(t);
+}
+
+function lastChatRow() {
+  const host = document.getElementById("chat-inner") || (typeof agentEl !== "undefined" && agentEl.chat);
+  if (!host) return null;
+  return host.lastElementChild;
+}
+
+function lastChatBodyText(el) {
+  if (!el) return "";
+  const body = el.querySelector(".body");
+  return ((body && body.textContent) || el.textContent || "").replace(/\s+/g, " ").trim();
+}
+
 function appendMsg(text, kind = "ai") {
   /* Transcript layout mirrors GoarClient.kt + APK chat surface:
      user / Thought (stream) / * tools / tool output / assistant (stream) / turn footer
      Strict ASCII — no emoji. */
   if (!agentEl.chat) return null;
   const host = document.getElementById("chat-inner") || agentEl.chat;
+  kind = kind || "ai";
+
+  if (text && (kind === "thought" || kind === "ai") && isStagingProse(text)) {
+    return null;
+  }
+
+  const last = lastChatRow();
+  if (last && text) {
+    const sameKind =
+      (kind === "thought" && last.classList.contains("thought")) ||
+      (kind === "tool-run" && last.classList.contains("tool-run")) ||
+      (kind === "tool-out" && last.classList.contains("tool-out")) ||
+      (kind === "ai" && last.classList.contains("ai") && !last.classList.contains("thought")) ||
+      (kind === "sys" && last.classList.contains("sys"));
+    if (sameKind && lastChatBodyText(last) === String(text).replace(/\s+/g, " ").trim()) {
+      return { el: last, body: last.querySelector(".body") || last };
+    }
+  }
+
   try {
     const es = document.getElementById("emptyState") || document.getElementById("welcome");
     if (es) {
@@ -491,7 +529,6 @@ function appendMsg(text, kind = "ai") {
   const div = document.createElement("div");
   const body = document.createElement("div");
   body.className = "body";
-  kind = kind || "ai";
   if (kind === "user") {
     div.className = "msg user";
     const pre = document.createElement("span");
@@ -566,6 +603,79 @@ function appendMsg(text, kind = "ai") {
   return { el: div, body };
 }
 
+function paintToolPreview(name, args, out) {
+  const host = document.getElementById("chat-inner") || (typeof agentEl !== "undefined" && agentEl.chat);
+  if (!host) return;
+  const last = host.lastElementChild;
+  if (last && last.classList.contains("preview") && last.getAttribute("data-prev") === name) return;
+
+  const card = document.createElement("div");
+  card.className = "msg preview";
+  card.setAttribute("data-prev", String(name || ""));
+  const path = String((args && (args.path || args.file || args.url)) || "").trim();
+  const lower = (path || name || "").toLowerCase();
+  let painted = false;
+
+  if (name === "gecko_shot" || name === "browse") {
+    const shot = (typeof window !== "undefined" && window.__GOAR_LAST_SHOT) || "";
+    if (shot && /^data:image\//.test(shot)) {
+      const img = document.createElement("img");
+      img.className = "preview-img";
+      img.alt = "Firefox";
+      img.src = shot;
+      card.appendChild(img);
+      if (path) {
+        const cap = document.createElement("div");
+        cap.className = "preview-cap";
+        cap.textContent = path;
+        card.appendChild(cap);
+      }
+      painted = true;
+    }
+  }
+
+  if (!painted && (name === "write_file" || name === "edit_file")) {
+    const lastW = (typeof window !== "undefined" && window.__GOAR_LAST_WRITE) || null;
+    const content = (lastW && lastW.path === path && lastW.content != null)
+      ? String(lastW.content)
+      : String((args && args.content) || "");
+    if (/\.(html?|svg)$/i.test(path) && content) {
+      const frame = document.createElement("iframe");
+      frame.className = "preview-frame";
+      frame.setAttribute("sandbox", "allow-scripts allow-modals");
+      frame.setAttribute("title", path);
+      frame.srcdoc = content.slice(0, 180000);
+      card.appendChild(frame);
+      const cap = document.createElement("div");
+      cap.className = "preview-cap";
+      cap.textContent = path;
+      card.appendChild(cap);
+      painted = true;
+    } else if (/\.(png|jpe?g|gif|webp)$/i.test(path) && content && /^data:image\//.test(content)) {
+      const img = document.createElement("img");
+      img.className = "preview-img";
+      img.alt = path;
+      img.src = content;
+      card.appendChild(img);
+      painted = true;
+    } else if (content && /\.(md|py|js|ts|css|json|sh|txt)$/i.test(path)) {
+      const pre = document.createElement("pre");
+      pre.className = "preview-code";
+      pre.textContent = content.split("\n").slice(0, 24).join("\n").slice(0, 2400);
+      card.appendChild(pre);
+      const cap = document.createElement("div");
+      cap.className = "preview-cap";
+      cap.textContent = path;
+      card.appendChild(cap);
+      painted = true;
+    }
+  }
+
+  if (!painted) return;
+  host.appendChild(card);
+  try { card.scrollIntoView({ block: "end", behavior: "smooth" }); } catch (_) {}
+}
+
 /** APK GoarClient.chatStream: create once, feed onTextDelta / onThinkingDelta. */
 function beginStreamMsg(kind) {
   const ref = appendMsg("", kind === "thought" ? "thought" : "ai");
@@ -596,7 +706,14 @@ function streamDelta(ref, fullText) {
   try {
     if (ref.el && ref.el.classList.contains("thought") && ref.el._fold) {
       ref.el._fold.textContent = "Thinking";
-      ref.el.classList.add("streaming");
+      ref.el.classList.add("streaming", "collapsed");
+    }
+  } catch (_) {}
+  try {
+    if (ref.el && ref.el.classList.contains("ai") && !ref.el.classList.contains("thought")) {
+      const hide = typeof isStagingProse === "function" && isStagingProse(clean);
+      ref._staging = hide;
+      ref.el.style.display = hide ? "none" : "";
     }
   } catch (_) {}
   try {
@@ -610,7 +727,7 @@ function endStreamMsg(ref) {
   ref.el.classList.remove("streaming");
   try {
     const b = ref.body && ref.body.textContent ? ref.body.textContent.trim() : "";
-    if (!b) {
+    if (!b || ref._staging || (ref.el.classList.contains("ai") && !ref.el.classList.contains("thought") && typeof isStagingProse === "function" && isStagingProse(b))) {
       ref.el.remove();
       return;
     }

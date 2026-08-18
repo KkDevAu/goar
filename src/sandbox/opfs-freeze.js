@@ -1,4 +1,4 @@
-const FREEZE_VERSION = "goar-freeze-v3-manus";
+const FREEZE_VERSION = "goar-freeze-v5-pip";
 const FREEZE_OPFS_DIR = "goaros";
 const FREEZE_OPFS_FILE = "frozen-session.bin";
 const FREEZE_OPFS_META = "frozen-session.meta.json";
@@ -82,34 +82,37 @@ async function gunzipBytes(u8) {
   throw new Error("gzip frozen state but no decompressor");
 }
 
-async function loadPackagedFreeze() {
-  const url = (typeof LOCAL_ASSETS !== "undefined" && LOCAL_ASSETS.frozen) || "./assets/frozen.bin.gz";
-  const res = await fetch(url, { cache: "force-cache" });
-  if (!res.ok) return null;
-  const raw = new Uint8Array(await res.arrayBuffer());
-  if (raw.byteLength < 1000) return null;
-  const state = await gunzipBytes(raw);
-  const meta = {
-    version: FREEZE_VERSION,
-    source: "frozen.bin.gz",
-    guestRamMB: (typeof window !== "undefined" && window.GOAR_GUEST_RAM_MB) || 512,
-    gzBytes: raw.byteLength,
-    rawBytes: state.byteLength,
-  };
-  try { window.__GOAR_FROZEN_META = meta; } catch (_) {}
+async function loadOpfsFreeze() {
+  const metaBytes = await opfsReadBytes(FREEZE_OPFS_DIR, FREEZE_OPFS_META);
+  if (!metaBytes) return null;
+  let meta = {};
+  try { meta = JSON.parse(new TextDecoder().decode(metaBytes)); } catch (_) { return null; }
+  if (!meta || meta.version !== FREEZE_VERSION) return null;
+  const gz = await opfsReadBytes(FREEZE_OPFS_DIR, FREEZE_OPFS_FILE);
+  if (!gz || gz.byteLength < 1000) return null;
+  const state = await gunzipBytes(gz);
   return {
     state: state.buffer.slice(state.byteOffset, state.byteOffset + state.byteLength),
     meta,
   };
 }
 
+async function loadPackagedFreeze() {
+  // Stale RAM snapshots undo rootfs fixes (pip distlib). Only OPFS with this
+  // FREEZE_VERSION is accepted. Ship a new frozen.bin.gz after a verified boot.
+  return null;
+}
+
 async function loadSessionSnapshot() {
   if (typeof window !== "undefined" && window.GOAR_FORCE_COLD) return null;
   try {
-    const pack = await loadPackagedFreeze();
-    if (pack && pack.state) return pack;
+    const opfs = await loadOpfsFreeze();
+    if (opfs && opfs.state) {
+      window.__GOAR_FROZEN_META = opfs.meta || {};
+      return opfs;
+    }
   } catch (e) {
-    console.warn("packaged freeze", e);
+    console.warn("opfs freeze", e);
   }
   return null;
 }

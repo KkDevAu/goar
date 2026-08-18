@@ -344,11 +344,7 @@
   }
 
   function categoryKitBlurb() {
-    return (
-      "\n## Work\n" +
-      "Use guest for the workspace (bash, read, write, grep, tree). Use net to browse the web.\n" +
-      "Do not list tools or dump the catalog. To explore, run the workspace tree.\n"
-    );
+    return "";
   }
 
   const HASH_ALGO = {
@@ -650,91 +646,10 @@
   );
 
   async function toolDiscover(args) {
-    const q = String((args && (args.query || args.q || args.thought)) || "")
-      .toLowerCase()
-      .trim();
-    if (!q) {
-      return JSON.stringify({ ok: false, hint: "Describe what you need." });
-    }
-    const askingMap = /\b(tools?|available|securit|pysec|what can|capabilities|kit)\b/.test(q);
-    if (askingMap) {
-      return JSON.stringify({
-        ok: true,
-        use: ["bash", "python_exec", "write_file", "browser", "web_fetch", "browse", "create_tool"],
-        note: "Write Python or drive the browser. Do not list a catalog.",
-      });
-    }
-
-    const explore = /\b(explor|workspace|folder|director|tree|files?|disk|look around|what.?s here|list (the )?files)\b/.test(q);
-    if (explore) {
-      try {
-        if (typeof toolWorkspaceTree === "function") {
-          return await toolWorkspaceTree({ path: "/workspace", depth: 3, limit: 220 });
-        }
-        if (typeof toolLs === "function") {
-          return await toolLs({ path: "/workspace" });
-        }
-      } catch (e) {
-        return "TOOL_ERROR: " + (e && e.message ? e.message : e);
-      }
-    }
-
-    const browse = /\b(open|browse|visit|go to|firefox|gecko|page|url|http)\b/.test(q);
-    if (browse && typeof toolWebFetch === "function") {
-      const m = q.match(/https?:\/\/\S+/);
-      if (m) {
-        try { return await toolWebFetch({ url: m[0] }); } catch (e) {
-          return "TOOL_ERROR: " + (e && e.message ? e.message : e);
-        }
-      }
-    }
-
-    const terms = q.split(/[^a-z0-9_.]+/).filter((t) => t.length > 2 && !STOP.has(t));
-    let force = null;
-    if (/\b(bash|shell|python|write|read|edit|grep|glob|mkdir)\b/.test(q)) force = "guest";
-    else if (/\b(fetch|http|search|wisp|browser|click|type|screenshot)\b/.test(q)) force = "net";
-    else if (/\b(kv|cache|ttl)\b/.test(q)) force = "kv";
-    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "python";
-    else if (/\b(wasm|micropip)\b/.test(q)) force = "guest";
-
-    const hits = [];
-    function add(via, id, why) {
-      if (force && via !== force && !(force === "pysec" && String(via).indexOf("pysec") === 0)) return;
-      let score = 0;
-      const blob = (via + " " + id + " " + why).toLowerCase();
-      for (const t of terms) {
-        if (id.toLowerCase() === t) score += 10;
-        else if (id.toLowerCase().split(".")[0] === t || id.toLowerCase().startsWith(t + ".")) score += 8;
-        else if (blob.indexOf(t) !== -1) score += t.length > 4 ? 3 : 1;
-      }
-      if (FAMILY_DEFAULT[id] || id === "hash.digest" || id === "codec.encode" || id === "jwt.inspect") score += 2;
-      if (id === "list_session_tools" || id === "discover") return;
-      if (!score) return;
-      hits.push({ call: via, use: id, why: why, score: score });
-    }
-    for (const [via, map] of [
-      ["guest", GUEST_ACTIONS],
-      ["net", NET_ACTIONS],
-      ["kv", KV_ACTIONS],
-      ["mind", MIND_ACTIONS],
-    ]) {
-      for (const [id, why] of Object.entries(map)) add(via, id, why);
-    }
-    try {
-      const idx = getIndex();
-      for (const [id, meta] of Object.entries(idx.idToMeta || {})) {
-        const lane = idx.idToLane[id] || "other";
-        add(lane === "other" ? "pysec" : "pysec_" + lane, id, (meta && meta.description) || "");
-      }
-    } catch (_) {}
-    hits.sort((a, b) => b.score - a.score);
-    const best = hits[0];
-    if (!best) {
-      return JSON.stringify({ ok: true, next: { call: "guest", use: "bash" } });
-    }
     return JSON.stringify({
       ok: true,
-      next: { call: best.call, use: best.use },
+      do: "python_exec",
+      code: "import pyodide_security as ps\n# ps.run_tool('httpx.probe', url='https://example.com/')",
     });
   }
 

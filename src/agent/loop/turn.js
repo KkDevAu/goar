@@ -17,6 +17,7 @@ async function agentTurn(userText) {
   agentBusy = true;
   agentAbort = false;
   agentAbortController = new AbortController();
+  try { window.__GOAR_LAST_SHOWN_TOOL = ""; window.__GOAR_LAST_SHOWN_OUT = ""; } catch (_) {}
   // Fingerprints are telemetry only (never used to ban tools)
   recentToolFingerprints = [];
   pathActionCounts = Object.create(null);
@@ -123,9 +124,7 @@ async function agentTurn(userText) {
           break;
         }
         if (mw && mw.action === "compact") {
-          if (typeof maybeCompactAgentHistoryAsync === "function") {
-            await maybeCompactAgentHistoryAsync({ force: true, lastUsage });
-          } else if (typeof maybeCompactAgentHistory === "function") {
+          if (typeof maybeCompactAgentHistory === "function") {
             maybeCompactAgentHistory({ force: true, lastUsage });
           }
           refreshSystem();
@@ -135,11 +134,8 @@ async function agentTurn(userText) {
         }
       }
 
-      // Before each model call: compact if over token threshold (ADK CompactionRequestProcessor)
-      if (typeof maybeCompactAgentHistoryAsync === "function") {
-        const c = await maybeCompactAgentHistoryAsync({ lastUsage });
-        if (c && c.compacted) refreshSystem();
-      } else if (typeof maybeCompactAgentHistory === "function") {
+      // Before each model call: extractive compact only (never wait on an extra LLM)
+      if (typeof maybeCompactAgentHistory === "function") {
         const c = maybeCompactAgentHistory({ lastUsage });
         if (c && c.compacted) refreshSystem();
       }
@@ -259,15 +255,17 @@ async function agentTurn(userText) {
       }
 
       if (thinking && thinking.trim() && !thinkRef) {
-        appendMsg(thinking.trim(), "thought");
+        try { if (typeof agentState !== "undefined") agentState.lastThinking = thinking.slice(0, 4000); } catch (_) {}
       }
 
       if (toolCalls.length || finish === "tool_calls") {
-        if (content && content.trim() && !aiRef) {
-          appendMsg(content.trim().slice(0, 800), "thought");
-        }
-        if (aiRef && !(content && content.trim())) {
+        // Pre-tool prose is staging — never leave it in the transcript
+        if (aiRef && aiRef.el) {
           try { aiRef.el.remove(); } catch (_) {}
+          aiRef = null;
+        }
+        if (thinkRef && thinkRef.el) {
+          try { thinkRef.el.classList.add("collapsed"); } catch (_) {}
         }
 
         agentHistory.push({
@@ -334,7 +332,12 @@ async function agentTurn(userText) {
           else if (String(name).indexOf("pysec") === 0) summary = name + "  " + String(args.tool || args.tool_id || "").slice(0, 80);
           else summary = name;
 
-          appendMsg(summary, "tool-run");
+          const silent = name === "think" || name === "set_phase";
+          const shownKey = silent ? "" : (summary + "\n" + JSON.stringify(args || {}).slice(0, 400));
+          if (!silent && window.__GOAR_LAST_SHOWN_TOOL !== shownKey) {
+            appendMsg(summary, "tool-run");
+            window.__GOAR_LAST_SHOWN_TOOL = shownKey;
+          }
           toolCount++;
           try { window.__GOAR_LAST_TOOL_LABEL = summary; } catch (_) {}
           try { syncIndicators({ phase: "tool", tool: summary }); } catch (_) {}
@@ -364,7 +367,11 @@ async function agentTurn(userText) {
           }
 
           const preview = out.split("\n").slice(0, 120).join("\n").slice(0, 50000);
-          if (preview.trim()) appendMsg(preview, "tool-out");
+          if (!silent && preview.trim() && window.__GOAR_LAST_SHOWN_OUT !== preview.trim()) {
+            appendMsg(preview, "tool-out");
+            window.__GOAR_LAST_SHOWN_OUT = preview.trim();
+          }
+          try { if (typeof paintToolPreview === "function") paintToolPreview(name, args, out); } catch (_) {}
           // Store compact form in model history (ADK caps tool content in context)
           const forModel = typeof compactToolResult === "function" ? compactToolResult(out) : out;
           return { tc, name, result: forModel };
@@ -397,11 +404,8 @@ async function agentTurn(userText) {
           break;
         }
 
-        // Compact after tool fan-in if prompt grew
-        if (typeof maybeCompactAgentHistoryAsync === "function") {
-          const c2 = await maybeCompactAgentHistoryAsync({ lastUsage });
-          if (c2 && c2.compacted) refreshSystem();
-        } else if (typeof maybeCompactAgentHistory === "function") {
+        // Compact after tool fan-in if prompt grew — extractive only, never pause for an LLM summary
+        if (typeof maybeCompactAgentHistory === "function") {
           const c2 = maybeCompactAgentHistory({ lastUsage });
           if (c2 && c2.compacted) refreshSystem();
         } else if (typeof trimAgentHistory === "function") {
@@ -409,28 +413,15 @@ async function agentTurn(userText) {
         }
         try { persistAgentChat(); } catch (_) {}
 
-        // Seamless multi-wave: extend budget instead of context-reset stop
+        // Seamless multi-wave: extend budget. No extra user turn. No chat note.
         if (step >= stepBudget - 1 && waves + 1 < maxWaves) {
           waves++;
           if (typeof agentState !== "undefined") agentState.wave = waves;
           stepBudget += stepsPerWave;
-          // Force a compaction at wave boundary so next wave starts lean but continuous
-          if (typeof maybeCompactAgentHistoryAsync === "function") {
-            await maybeCompactAgentHistoryAsync({ force: true, lastUsage, useLlm: true });
-          } else if (typeof maybeCompactAgentHistory === "function") {
+          if (typeof maybeCompactAgentHistory === "function") {
             maybeCompactAgentHistory({ force: true, lastUsage });
           }
           refreshSystem();
-          agentHistory.push({
-            role: "user",
-            content:
-              "[continuity] Wave " + (waves + 1) + " of the same mission. " +
-              "Older tool transcript was compacted into ROLLING CONTEXT. " +
-              "Continue the PRIMARY USER REQUEST — do not restart. Tools stay available.",
-          });
-          try {
-            appendMsg("wave " + (waves + 1) + " · same mission", "sys");
-          } catch (_) {}
         }
         continue;
       }

@@ -1,10 +1,9 @@
 /**
- * Wire Manus CORS proxy for all pysec live tools (httpx, fetch, nuclei, …).
- * Order:
- *  1) Saved manusKey / manus_api_key in settings
- *  2) POST same-origin /api/manus-key (proxy.generate path) then configure
- *  3) Fall back to same-origin /api/cors-proxy (Manus-shaped, no external key)
- * Re-tests with proxy.test(example.com). Never leaves live tools on bare pyfetch CORS.
+ * Wire cors.manus.space for all pysec live tools (httpx, fetch, nuclei, …).
+ *   1) Saved manus key
+ *   2) mintManusKey → cors.manus.space tRPC
+ *   3) configure base_url=https://cors.manus.space/api/proxy
+ * Live tools go through ALL /api/proxy/:targetUrl (x-api-key).
  */
 
 /**
@@ -106,15 +105,23 @@ async function ensurePysecNetwork() {
   } catch (_) {}
   if (!key) {
     try {
+      if (typeof mintManusKey === "function") {
+        key = await mintManusKey();
+        if (key) source = "manus-mint";
+      }
+    } catch (_) {}
+  }
+  if (!key) {
+    try {
       const s = typeof loadSettings === "function" ? loadSettings() : {};
       key = String((s && (s.manusKey || s.manus_api_key)) || "").trim();
       if (key) source = "settings";
     } catch (_) {}
-  } else {
+  } else if (!source) {
     source = "storage";
   }
 
-  // Mint via /api/manus-key (what proxy.generate expects) when no saved key
+  // Local serve can mint a key; production uses cors.manus.space tRPC via mintManusKey
   let mintMeta = null;
   if (!key && origin) {
     try {
@@ -168,27 +175,10 @@ json.dumps(r)
     }
   }
 
-  // Decide base_url: minted Manus key → cors.manus.space; local goar_ → same-origin
+  // cors.manus.space is the proxy.
   let baseUrl = (typeof window !== "undefined" && window.GOAR_CORS_PROXY) || "https://cors.manus.space/api/proxy";
   if (!key) {
-    try {
-      if (typeof mintManusKey === "function") {
-        key = await mintManusKey();
-        if (key) source = "manus-mint";
-      }
-    } catch (_) {}
-  }
-  const isLocalKey = !!(key && key.startsWith("goar_"));
-  if (isLocalKey && origin) {
-    baseUrl = origin + "/api/cors-proxy";
-  } else if (!key && origin) {
-    key = "goar_open";
-    baseUrl = origin + "/api/cors-proxy";
-    source = "local-open";
-  }
-
-  if (!key) {
-    console.warn("[goar] no Manus/local proxy key — live pysec HTTP will hit browser CORS");
+    console.warn("[goar] no Manus proxy key — live HTTP needs cors.manus.space");
     return { ok: false, error: "no proxy key" };
   }
 
@@ -204,23 +194,6 @@ json.dumps({"status": st, "test": r})
 `);
   let result;
   try { result = JSON.parse(probe); } catch (_) { result = { raw: probe }; }
-
-  // If Manus base failed, fall back to local cors-proxy
-  const testOk = !!(result && result.test && result.test.ok);
-  if (!testOk && origin && !isLocalKey) {
-    console.warn("[goar] Manus proxy test failed — falling back to /api/cors-proxy", result && result.test);
-    __pyodide.globals.set("_k", key.startsWith("goar_") ? key : "goar_fallback");
-    __pyodide.globals.set("_base", origin + "/api/cors-proxy");
-    const probe2 = await __pyodide.runPythonAsync(`
-from pyodide_security import proxy_tool
-import json
-st = proxy_tool.configure(api_key=_k, enabled=True, base_url=_base, auth_mode="both")
-r = await proxy_tool.test(target="https://example.com/")
-json.dumps({"status": st, "test": r})
-`);
-    try { result = JSON.parse(probe2); } catch (_) { result = { raw: probe2 }; }
-    source = "local-fallback";
-  }
 
   const ok = !!(result && result.test && result.test.ok);
   window.__GOAR_PROXY = {
@@ -242,17 +215,20 @@ async function ensurePysecWorker() {
     try { syncIndicators({ kit: "loading" }); } catch (_) {}
     await loadPysecCatalog();
     const files = await inflatePysecPackage();
-    // load Pyodide (CDN runtime only — toolkit is fully embedded)
-    // Prefer packaged WASM under ./assets/pyodide (offline), fall back to CDN
     let indexURL = (typeof HEAVY !== "undefined" && HEAVY.pyodide)
       ? HEAVY.pyodide
       : (typeof PYSEC_PYODIDE_LOCAL !== "undefined" ? PYSEC_PYODIDE_LOCAL : "https://cdn.jsdelivr.net/pyodide/v0.27.0/full/");
     const base = (typeof document !== "undefined" && document.baseURI) || location.href;
     indexURL = new URL(indexURL, base).href;
     if (!indexURL.endsWith("/")) indexURL += "/";
-    const mod = await import(indexURL + "pyodide.mjs");
-    __pyodide = await mod.loadPyodide({ indexURL });
-    // Polyfill hashlib.pbkdf2_hmac when missing (needed by cipher tools)
+    if (typeof pyBoot === "function") {
+      __pyodide = await pyBoot();
+    } else {
+      const mod = await import(indexURL + "pyodide.mjs");
+      __pyodide = await mod.loadPyodide({ indexURL });
+    }
+    try { window.__pyodide = __pyodide; } catch (_) {}
+    if (!__pyodide.worker) {
     await __pyodide.runPythonAsync(`
 import hashlib, hmac
 if not hasattr(hashlib, "pbkdf2_hmac"):
@@ -281,14 +257,15 @@ if not hasattr(hashlib, "pbkdf2_hmac"):
         return bytes(out[:dklen])
     hashlib.pbkdf2_hmac = _pbkdf2_hmac
 `);
+    }
 
     const root = "/home/pyodide";
-    __pyodide.FS.mkdirTree(root);
+    await Promise.resolve(__pyodide.FS.mkdirTree(root));
     for (const [path, data] of Object.entries(files)) {
       const full = root + "/" + path;
       const dir = full.slice(0, full.lastIndexOf("/"));
-      __pyodide.FS.mkdirTree(dir);
-      __pyodide.FS.writeFile(full, data);
+      await Promise.resolve(__pyodide.FS.mkdirTree(dir));
+      await Promise.resolve(__pyodide.FS.writeFile(full, data));
     }
     await __pyodide.runPythonAsync(`
 import sys
@@ -440,7 +417,7 @@ json.dumps(_res, default=str)
 }
 
 async function toolGuestHttp(args) {
-  if (typeof envReady !== "undefined" && !envReady) return "error: Alpine env not ready";
+  if (typeof envReady !== "undefined" && !envReady && !window.__GOAR_UNIX) return "error: environment not ready";
   const url = String((args && args.url) || "").trim();
   if (!url) return "error: url required";
   const method = String((args && args.method) || "GET").toUpperCase();

@@ -152,38 +152,7 @@ function planeSnapshot() {
  * Dense, model-facing interlock block — refreshed every system rebuild.
  */
 function systemPlaneBlurb() {
-  const p = planeSnapshot();
-  const nl = "\n";
-  const lines = [
-    "## LIVE WORKSPACE (one system — use together)",
-    "guest    : " +
-      (p.guest.online
-        ? "ONLINE — bash · python · FS · guest_http"
-        : p.guest.emu
-          ? "emulator up — guest tools ok"
-          : "booting"),
-    "fetch    : fabric " +
-      (p.host.mwReady ? "OK" : "fallback") +
-      " · CORS " +
-      (p.host.proxyOk ? "OK" : "pending"),
-    "kit      : pysec " +
-      (p.kit.ready ? "READY" : "loading") +
-      " · " +
-      p.kit.tools +
-      " ops",
-    "browser  : " +
-      (p.gecko && p.gecko.ready
-        ? ("LIVE · " + (p.gecko.lastUrl || p.gecko.mode || "embed") + " — browse / gecko_load with fetch")
-        : p.gecko && p.gecko.coi === false
-          ? "waiting isolation — fetch/guest still work"
-          : "warming with sandbox"),
-    "mind     : " +
-      p.mind.phase +
-      (p.mind.mission ? " · mission pinned" : ""),
-    "",
-    "Combine in the same step: browse = fetch + Firefox. CORS fail → guest_http AND gecko_load. Do not section work.",
-  ];
-  return lines.join(nl);
+  return "";
 }
 
 /** Infer + set phase from tool name (soft — does not override explicit set_phase mid-call). */

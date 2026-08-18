@@ -123,23 +123,15 @@
     }
     if (typeof goarHostFetch === "function") {
       try {
-        const r = await goarHostFetch(url, opts);
+        const r = await goarHostFetch(url, Object.assign({ render: true }, opts));
         if (r && r.body) return r;
       } catch (e) {
         S.lastError = String(e && e.message ? e.message : e);
       }
     }
-    const relays = [
-      (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
-      (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-    ];
-    for (let i = 0; i < relays.length; i++) {
-      try {
-        const res = await fetch(relays[i](url));
-        if (!res.ok) continue;
-        const text = await res.text();
-        if (text) return { ok: true, status: res.status, body: text, via: "relay", url: url };
-      } catch (_) {}
+    if (typeof manusHttpFetch === "function") {
+      const r = await manusHttpFetch(url, Object.assign({ render: true }, opts));
+      if (r && r.body) return r;
     }
     throw new Error(S.lastError || "fetch failed");
   }
@@ -258,6 +250,9 @@
   async function liveClick(x, y) {
     const doc = liveDoc();
     if (!doc) return { ok: false, error: "no document" };
+    if (typeof x === "string" && /[a-z.#\[\]]/i.test(x) && y == null) {
+      return liveClickSel(x);
+    }
     const el = doc.elementFromPoint(Number(x) || 0, Number(y) || 0);
     if (!el) return { ok: false, error: "no element" };
     try {
@@ -267,23 +262,64 @@
     return { ok: true, tag: el.tagName, text: String(el.textContent || "").slice(0, 80) };
   }
 
-  async function liveType(text) {
+  function liveClickSel(sel) {
     const doc = liveDoc();
     if (!doc) return { ok: false, error: "no document" };
-    const el = doc.activeElement || doc.querySelector("input,textarea,[contenteditable='true']");
+    const el = doc.querySelector(sel);
+    if (!el) return { ok: false, error: "no element", selector: sel };
+    try {
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+      el.focus();
+      el.click();
+    } catch (_) {}
+    const b = el.getBoundingClientRect();
+    return { ok: true, selector: sel, tag: el.tagName, x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  function liveFind(sel) {
+    const doc = liveDoc();
+    if (!doc) return { ok: false, error: "no document" };
+    const q = String(sel || "a,button,input,textarea,select,[role=button]");
+    const els = Array.prototype.slice.call(doc.querySelectorAll(q), 0, 40);
+    return {
+      ok: true,
+      url: S.url,
+      title: (doc.title || S.title || ""),
+      n: els.length,
+      matches: els.map(function (el, i) {
+        return {
+          i: i,
+          tag: el.tagName.toLowerCase(),
+          id: el.id || "",
+          name: el.getAttribute("name") || "",
+          type: el.getAttribute("type") || "",
+          href: el.getAttribute("href") || "",
+          text: String(el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").slice(0, 80),
+        };
+      }),
+    };
+  }
+
+  async function liveType(text, sel) {
+    const doc = liveDoc();
+    if (!doc) return { ok: false, error: "no document" };
+    let el = null;
+    if (sel) el = doc.querySelector(sel);
+    if (!el) el = doc.activeElement;
+    if (!el || el === doc.body) el = doc.querySelector("input:not([type=hidden]),textarea,[contenteditable='true']");
     if (!el) return { ok: false, error: "no field" };
     const val = String(text || "");
     try {
       el.focus();
       if ("value" in el) {
-        el.value = (el.value || "") + val;
+        el.value = val;
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
-        el.textContent = (el.textContent || "") + val;
+        el.textContent = val;
       }
     } catch (_) {}
-    return { ok: true, typed: val.length };
+    return { ok: true, typed: val.length, tag: el.tagName };
   }
 
   async function liveEval(js) {
@@ -291,10 +327,61 @@
     if (!iframe || !iframe.contentWindow) return { ok: false, error: "no window" };
     try {
       const result = iframe.contentWindow.eval(String(js || "document.title"));
-      return { ok: true, result: result };
+      let out = result;
+      if (result && typeof result === "object") {
+        try { out = JSON.parse(JSON.stringify(result)); } catch (_) { out = String(result); }
+      }
+      return { ok: true, result: out };
     } catch (e) {
       return { ok: false, error: String(e && e.message ? e.message : e) };
     }
+  }
+
+  async function runBrowser(args) {
+    args = args || {};
+    const act = String(args.action || args.method || args.op || "url").toLowerCase();
+    const sel = args.selector || args.sel || args.query || "";
+    const url = args.url;
+    const text = args.text != null ? args.text : args.value;
+    if (act === "goto" || act === "go" || act === "open" || act === "load") {
+      if (!url) return { ok: false, error: "url required" };
+      return liveLoad(url);
+    }
+    if (act === "url" || act === "status") return liveStatus();
+    if (act === "title") {
+      const doc = liveDoc();
+      return { ok: true, title: (doc && doc.title) || S.title, url: S.url };
+    }
+    if (act === "content" || act === "html") {
+      const doc = liveDoc();
+      if (!doc) return { ok: false, error: "no document" };
+      return { ok: true, html: String(doc.documentElement.outerHTML || "").slice(0, 12000), url: S.url };
+    }
+    if (act === "find" || act === "elements") return liveFind(sel);
+    if (act === "click" || act === "$") {
+      if (sel) return liveClickSel(sel);
+      return liveClick(args.x, args.y);
+    }
+    if (act === "type" || act === "fill" || act === "send_keys") return liveType(text, sel);
+    if (act === "eval" || act === "evaluate" || act === "execute") return liveEval(args.js || args.code || args.script || "document.title");
+    if (act === "shot" || act === "screenshot") return liveShot();
+    if (act === "wait" || act === "waitfor") {
+      if (sel) {
+        const limit = Math.max(200, Math.min(20000, Number(args.ms || args.timeout) || 8000));
+        const t0 = Date.now();
+        while (Date.now() - t0 < limit) {
+          const doc = liveDoc();
+          if (doc && doc.querySelector(sel)) return { ok: true, selector: sel, ms: Date.now() - t0 };
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        return { ok: false, error: "timeout", selector: sel };
+      }
+      return liveWait(args.ms || args.timeout);
+    }
+    if (act === "back") return liveBack();
+    if (act === "reload") return liveReload();
+    if (act === "forward") return liveForward();
+    return { ok: false, error: "action goto|click|type|eval|find|shot|url|title|content|wait|back|reload" };
   }
 
   async function liveShot() {
@@ -371,6 +458,8 @@
   global.ensureLiveBrowser = ensureLive;
   global.liveLoad = liveLoad;
   global.liveStatus = liveStatus;
+  global.liveFind = liveFind;
+  global.runBrowser = runBrowser;
 
   global.ensureGecko = ensureLive;
   global.geckoLoad = liveLoad;

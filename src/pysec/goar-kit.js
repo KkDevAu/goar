@@ -92,7 +92,11 @@ async function ensureSqlmap() {
   }
   // 1) try network pip (best when virtio-net works)
   try { await ensureGuestNet(); } catch (_) {}
-  const pip = await guestExec("pip3 install --break-system-packages -q sqlmap 2>&1 | tail -8; python3 -c 'import sqlmap' 2>&1; which sqlmap; sqlmap --version 2>&1 | head -1", 300000);
+  if (typeof guestPipInstall === "function") {
+    const pip = await guestPipInstall("sqlmap", 300000);
+    if (pip && pip.ok) return { ok: true, via: pip.via || "pip", output: String(pip.output || "").slice(0, 400) };
+  }
+  const pip = await guestExec("python3 -m pip install --break-system-packages --disable-pip-version-check -q sqlmap 2>&1 | tail -8; python3 -c 'import sqlmap' 2>&1; which sqlmap; sqlmap --version 2>&1 | head -1", 300000);
   if (pip && pip.code === 0 && !/No module|not found|error/i.test(pip.output || "")) {
     return { ok: true, via: "pip", output: (pip.output || "").slice(0, 400) };
   }
@@ -217,10 +221,7 @@ async function toolInstallSecurity(args) {
   const which = String(args.package || "sqlmap").toLowerCase();
   if (which === "sqlmap") return JSON.stringify(await ensureSqlmap());
   if (which === "nmap" || which === "recon") {
-    try { await ensureGuestNet(); } catch (_) {}
-    const r = await guestExec("apk add --no-cache nmap nmap-scripts curl 2>&1 | tail -20", 300000);
-    await ensureGuestSecurityKit();
-    return "exit " + r.code + "\n" + r.output;
+    return { ok: false, error: "nmap is not in this Wasm Unix. Use pysec recon or python." };
   }
   return "unknown package — use sqlmap or nmap";
 }
@@ -228,4 +229,4 @@ async function toolInstallSecurity(args) {
 
 
 
-/* ===== pyodide_security v6 EMBEDDED (gzip tar + inflate like Alpine) ===== */
+/* ===== pyodide_security 8.1.0 EMBEDDED (gzip tar) ===== */

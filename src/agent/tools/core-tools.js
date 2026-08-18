@@ -377,7 +377,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "python_exec",
-    description: "Run Python (Pyodide). Pass code or path.",
+    description: "Run Python. code or path. Security: import pyodide_security as ps; ps.run_tool('httpx.probe', url=...). Numeric: import goar_jit.",
     parameters: { type: "object", properties: {
       code: { type: "string" },
       path: { type: "string" },

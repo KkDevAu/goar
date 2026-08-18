@@ -18,9 +18,9 @@
 
 const GOAR_COMPACTION = {
   /** ~ADK token_threshold — when prompt est. exceeds this, compact older events */
-  tokenThreshold: 5200,
+  tokenThreshold: 3600,
   /** Keep last N non-system messages raw after a compaction */
-  eventRetentionSize: 14,
+  eventRetentionSize: 10,
   /** ADK overlap_size: re-include this many trailing events from the compacted range */
   overlapSize: 4,
   /** Cap each tool payload in summaries (ADK _MAX_TOOL_CONTENT_CHARS = 2000) */
@@ -277,8 +277,8 @@ function missionContextBlock() {
   }
   if (agentState.wave > 0) {
     parts.push(
-      "## CONTINUITY\nWave " + (agentState.wave + 1) +
-      " of the same mission. History was compacted for token limits — keep going, do not reset."
+      "## CONTINUITY\nSame job, wave " + (agentState.wave + 1) +
+      ". Keep going from ROLLING CONTEXT. Do not recap. Do not restart."
     );
   }
   return parts.length ? "\n\n" + parts.join("\n\n") : "";
@@ -348,9 +348,7 @@ function maybeCompactAgentHistory(opts) {
 
   const tokensAfter = estimatePromptTokens(agentHistory);
   try {
-    if (typeof paintLiveWork === "function") {
-      paintLiveWork({ text: "Keeping context lean" });
-    }
+    /* compact is silent — do not change the live strip */
   } catch (_) {}
   if (typeof paintTokenMeter === "function") {
     try {
@@ -411,9 +409,7 @@ async function maybeCompactAgentHistoryAsync(opts) {
   agentHistory = sys ? [sys, compactMsg].concat(keep) : [compactMsg].concat(keep);
   const tokensAfter = estimatePromptTokens(agentHistory);
   try {
-    if (typeof paintLiveWork === "function") {
-      paintLiveWork({ text: "Keeping context lean" });
-    }
+    /* compact is silent — do not change the live strip */
   } catch (_) {}
   if (typeof paintTokenMeter === "function") {
     try {

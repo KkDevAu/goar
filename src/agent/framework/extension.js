@@ -225,7 +225,7 @@ json.dumps({"ok": True, "result": result}, default=str)
       return typeof out === "string" ? out : JSON.stringify(out);
     }
     if (entry.kind === "guest") {
-      if (typeof envReady !== "undefined" && !envReady) return "error: Alpine env not ready";
+      if (typeof envReady !== "undefined" && !envReady && !window.__GOAR_UNIX) return "error: environment not ready";
       let cmd = entry.body;
       for (const [k, v] of Object.entries(args)) {
         const safe = String(v).replace(/'/g, "'\\''");

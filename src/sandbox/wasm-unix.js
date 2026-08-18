@@ -533,6 +533,17 @@ async function unixApplet(argv, stdin) {
   const flag = (f) => a.includes(f);
   const pos = a.filter((x) => x[0] !== "-");
 
+  if (cmd === "cd" || cmd === "export" || cmd === "python" || cmd === "python3" || cmd === "pip" || cmd === "pip3" || cmd === "ash" || cmd === "sh" || cmd === "bash") {
+    /* stay in-process */
+  } else if (typeof wasiBoxCan === "function" && wasiBoxCan(cmd) && typeof wasiBusybox === "function") {
+    try {
+      const r = await wasiBusybox(argv, stdin, Unix.cwd);
+      if (r) return r;
+    } catch (e) {
+      console.warn("[goar] wasi applet", cmd, e);
+    }
+  }
+
   if (cmd === "echo") {
     const n = a[0] === "-n";
     const bits = n ? a.slice(1) : a;
@@ -967,6 +978,13 @@ async function bootWasmUnix() {
     try {
       if (typeof ensureGoarKernel === "function") await ensureGoarKernel();
     } catch (e) { console.warn("[goar] kernel boot", e); }
+    try {
+      if (typeof ensureJit === "function") ensureJit();
+      if (typeof installGoarJitPy === "function") await installGoarJitPy();
+    } catch (e) { console.warn("[goar] jit", e); }
+    try {
+      if (typeof ensureWasiBox === "function") ensureWasiBox().catch(() => {});
+    } catch (_) {}
     try {
       if (typeof upgradePysecPack === "function") upgradePysecPack().catch(() => {});
     } catch (_) {}

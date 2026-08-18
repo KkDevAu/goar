@@ -5,27 +5,19 @@
 function buildVibeSystemPrompt() {
   const lines = [];
   if (typeof OPERATOR_CORE === "string") lines.push(OPERATOR_CORE.trim());
-  let live = "LIVE:";
-  try {
-    const ready = typeof envReady !== "undefined" && envReady;
-    live += " env=" + (ready ? "ready" : "booting");
-  } catch (_) {
-    live += " env=?";
-  }
+  let live = "";
   try {
     const s = typeof loadSettings === "function" ? loadSettings() : {};
-    if (s && s.apiModel) live += " model=" + s.apiModel;
+    if (s && s.apiModel) live = "model=" + s.apiModel;
   } catch (_) {}
   try {
     if (typeof agentState !== "undefined" && agentState && agentState.mission) {
-      live += "\nMISSION: " + String(agentState.mission).slice(0, 280);
+      const m = String(agentState.mission).trim();
+      if (m && m.length > 2 && !/^(hi|hey|hello|thanks|ok|okay)\b/i.test(m)) {
+        live += (live ? "\n" : "") + "MISSION: " + m.slice(0, 240);
+      }
     }
   } catch (_) {}
-  try {
-    if (typeof GOAR_SCRATCH !== "undefined" && GOAR_SCRATCH && GOAR_SCRATCH.guestPath) {
-      live += "\nSCRATCH: " + GOAR_SCRATCH.guestPath;
-    }
-  } catch (_) {}
-  lines.push(live);
+  if (live) lines.push(live);
   return lines.filter(Boolean).join("\n\n");
 }

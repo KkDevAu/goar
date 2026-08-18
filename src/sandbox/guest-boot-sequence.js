@@ -22,7 +22,14 @@ async function runAutoSequence() {
         "echo [goar-seq] thaw-done"
       );
       await waitForSerial(/\[goar-seq\] thaw-done/, 8000);
-      send("set -a; . /run/goar.env; set +a; cd /workspace; goar");
+      send(
+        "mkdir -p /usr/local/bin; " +
+        "printf '%s\\n' '#!/bin/sh' 'export PIP_BREAK_SYSTEM_PACKAGES=1' 'export PYTHONUNBUFFERED=1' 'exec python3 -m pip --disable-pip-version-check \"$@\"' > /usr/local/bin/pip; " +
+        "cp /usr/local/bin/pip /usr/local/bin/pip3; cp /usr/local/bin/pip /usr/bin/pip; cp /usr/local/bin/pip /usr/bin/pip3; " +
+        "chmod 755 /usr/local/bin/pip /usr/local/bin/pip3 /usr/bin/pip /usr/bin/pip3 2>/dev/null; " +
+        "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; " +
+        "cd /workspace; echo [goar-seq] pip-wrap"
+      );
     }
     seqDone = true;
   try {
@@ -114,6 +121,12 @@ async function runAutoSequence() {
     "ip route replace default via 192.168.86.1 dev eth0 2>/dev/null || true; " +
     "printf 'nameserver 192.168.86.1\n' > /etc/resolv.conf; " +
     "command -v bash >/dev/null 2>&1 || ln -sf /bin/sh /bin/bash 2>/dev/null || true; " +
+    "mkdir -p /usr/local/bin; " +
+    "printf '%s\\n' '#!/bin/sh' 'export PIP_BREAK_SYSTEM_PACKAGES=1' 'export PYTHONUNBUFFERED=1' 'export PIP_DISABLE_PIP_VERSION_CHECK=1' 'exec python3 -m pip --disable-pip-version-check \"$@\"' > /usr/local/bin/pip; " +
+    "cp /usr/local/bin/pip /usr/local/bin/pip3; " +
+    "cp /usr/local/bin/pip /usr/bin/pip; cp /usr/local/bin/pip /usr/bin/pip3; " +
+    "chmod 755 /usr/local/bin/pip /usr/local/bin/pip3 /usr/bin/pip /usr/bin/pip3; " +
+    "stty -F /dev/ttyS0 sane echo icanon icrnl opost onlcr cols 100 rows 30 2>/dev/null || true; " +
     "echo [goar-seq] net-done"
   );
   await waitForSerial(/\[goar-seq\] net-done/, 20000);

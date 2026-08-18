@@ -22,7 +22,8 @@ window.__goarMarkEnvReady = function (ok, detail) {
 window.__GOAR_GET_ENV = () => ({
   envReady: !!envReady,
   windowEnv: !!window.envReady,
-  emu: !!window.__emulator,
+  emu: !!(window.__emulator || window.__GOAR_UNIX),
+  unix: !!window.__GOAR_UNIX,
   seqDone: !!seqDone,
   seqRunning: !!seqRunning,
 });

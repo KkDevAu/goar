@@ -7,39 +7,50 @@ async function loadAll() {
   await new Promise((r) => requestAnimationFrame(() => r()));
 
   async function loadOne(key, url, weight, minBytes) {
-    setProgress(weight, "Loading " + key, url.split("/").pop());
-    const res = await fetch(url, { cache: "force-cache" });
-    if (!res.ok) throw new Error(key + " missing (" + url + " → " + res.status + ")");
-    const total = Number(res.headers.get("Content-Length") || 0);
-    let buf;
-    if (res.body && total > 0) {
-      const reader = res.body.getReader();
-      const chunks = [];
-      let got = 0;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        got += value.byteLength;
-        setProgress(
-          weight + Math.min(12, (got / total) * 12),
-          key,
-          (got / 1048576).toFixed(1) + " / " + (total / 1048576).toFixed(1) + " MB"
-        );
+    setProgress(weight, "Loading " + key, String(url).split("/").pop());
+    const list = (typeof ASSETS !== "undefined" && ASSETS[key]) ? ASSETS[key] : [url];
+    let lastErr = "";
+    for (const candidate of list) {
+      try {
+        const nocache = /rootfs|initrd|cpio/i.test(candidate) ? "no-store" : "force-cache";
+        const res = await fetch(candidate, { cache: nocache });
+        if (!res.ok) { lastErr = candidate + " → " + res.status; continue; }
+        const total = Number(res.headers.get("Content-Length") || 0);
+        let buf;
+        if (res.body && total > 0) {
+          const reader = res.body.getReader();
+          const chunks = [];
+          let got = 0;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            got += value.byteLength;
+            setProgress(
+              weight + Math.min(12, (got / total) * 12),
+              key,
+              (got / 1048576).toFixed(1) + " / " + (total / 1048576).toFixed(1) + " MB"
+            );
+          }
+          const out = new Uint8Array(got);
+          let off = 0;
+          for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+          buf = out.buffer;
+        } else {
+          buf = await res.arrayBuffer();
+        }
+        if (!buf || buf.byteLength < (minBytes || 1024)) {
+          lastErr = key + " incomplete (" + (buf ? buf.byteLength : 0) + " B)";
+          continue;
+        }
+        if (progress[key] !== undefined) progress[key] = 1;
+        setProgress(weight + 14, key, (buf.byteLength / 1048576).toFixed(1) + " MB");
+        return buf;
+      } catch (e) {
+        lastErr = String(e && e.message ? e.message : e);
       }
-      const out = new Uint8Array(got);
-      let off = 0;
-      for (const c of chunks) { out.set(c, off); off += c.byteLength; }
-      buf = out.buffer;
-    } else {
-      buf = await res.arrayBuffer();
     }
-    if (!buf || buf.byteLength < (minBytes || 1024)) {
-      throw new Error(key + " incomplete (" + (buf ? buf.byteLength : 0) + " B)");
-    }
-    if (progress[key] !== undefined) progress[key] = 1;
-    setProgress(weight + 14, key, (buf.byteLength / 1048576).toFixed(1) + " MB");
-    return buf;
+    throw new Error(key + " missing (" + lastErr + ")");
   }
 
   const bios = await loadOne("seabios", LOCAL_ASSETS.seabios, 4, 10000);

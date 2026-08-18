@@ -79,11 +79,18 @@ async function runAgentTool(name, args) {
         }
       } catch (_) {}
       const geckoP = typeof geckoLoad === "function" ? cap(geckoLoad(url), 7000) : Promise.resolve(null);
-      const fetchP = cap(toolWebFetch({ url, timeout_ms: 7000 }), 8000);
+      const fetchP = cap(toolWebFetch({ url, timeout_ms: 7000, render: true }), 8000);
       const [gecko, fetchOut] = await Promise.all([geckoP, fetchP]);
       let text = fetchOut;
       if (typeof text === "string" && text.length > 4000) text = text.slice(0, 4000) + "…";
       return JSON.stringify({ ok: true, url, gecko, fetch: text }, null, 2);
+    }
+    case "browser":
+    case "browser_drive": {
+      const fn = typeof runBrowser === "function" ? runBrowser : (typeof runPage === "function" ? runPage : null);
+      if (!fn) return JSON.stringify({ ok: false, error: "browser plane missing" });
+      const r = await fn(args);
+      try { return typeof r === "string" ? r : JSON.stringify(r); } catch (_) { return String(r); }
     }
     case "http_request": return toolHttp(args);
     case "env_info": return toolEnvInfo(args);
@@ -184,12 +191,12 @@ async function runAgentTool(name, args) {
       if (typeof geckoShot !== "function") return JSON.stringify({ ok: false, error: "gecko not loaded" });
       const r = await geckoShot();
       if (!r.ok) return JSON.stringify(r, null, 2);
+      try { window.__GOAR_LAST_SHOT = r.data || r.data_url || ""; } catch (_) {}
       return JSON.stringify({
         ok: true,
         mime: r.mime,
         bytes: r.bytes,
         url: r.url,
-        note: "JPEG is on the shared Firefox canvas — do not paste the image into chat",
       }, null, 2);
     }
     case "gecko_permit": {

@@ -358,16 +358,14 @@ function finishEnterChat() {
     }
   };
 
-  const wait = (typeof waitForGoarPlanes === "function")
-    ? waitForGoarPlanes(20000)
-    : Promise.resolve();
+  const wait = Promise.resolve();
   Promise.resolve(wait).then(go).catch(go);
 
   // Wire API into guest + force sandbox ONLINE for agent tools
   (async () => {
     try {
       // If shell already came up, never leave envReady false after user enters chat
-      if (window.__emulator && typeof send === "function") {
+      if ((window.__emulator || window.__GOAR_UNIX) && typeof send === "function" || window.__GOAR_UNIX) {
         try { window.__goarMarkEnvReady?.(true, "chat enter"); } catch (_) {}
       }
       const env = typeof settingsEnvBody === "function" ? settingsEnvBody() : null;

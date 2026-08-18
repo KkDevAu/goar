@@ -65,6 +65,7 @@ function persistAgentChat() {
     const chat = agentEl.chat;
     if (chat) {
       for (const el of chat.querySelectorAll(".msg")) {
+        if (el.classList.contains("preview")) continue;
         const kind = (el.className || "").replace(/\bmsg\b/g, "").replace(/\bstreaming\b/g, "").trim().split(/\s+/)[0] || "ai";
         const body = el.querySelector(".body");
         rows.push({ kind, text: body ? body.textContent : el.textContent });
@@ -116,6 +117,7 @@ function restoreAgentChat() {
       else if (kind.includes("user")) kind = "user";
       else if (kind.includes("err")) kind = "err";
       else if (kind.includes("ai")) kind = "ai";
+      if ((kind === "ai" || kind === "thought") && typeof isStagingProse === "function" && isStagingProse(r.text)) continue;
       appendMsg(String(r.text), kind);
     }
   } catch (_) {}

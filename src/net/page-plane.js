@@ -7,6 +7,10 @@ function pageSelJs(sel, body) {
 }
 
 async function pageEvalRaw(js) {
+  if (typeof liveEval === "function" && window.GOAR_GECKO_MODE === "live") {
+    const r = await liveEval(js);
+    return { ok: !!(r && r.ok !== false), result: r && r.result, error: r && r.error };
+  }
   if (typeof erudaInspect === "function") {
     const r = await erudaInspect({ action: "eval", js: js });
     const v = r && r.result !== undefined ? r.result : r;

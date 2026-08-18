@@ -50,9 +50,12 @@
   "sandbox/py-runtime.js",
   "sandbox/goar-kernel.src.js",
   "sandbox/kernel-bridge.js",
+  "sandbox/jit-plane.js",
+  "sandbox/wasi-box.js",
   "sandbox/wasm-unix.js",
   "sandbox/guest-exec.js",
   "sandbox/guest-fs-tools.js",
+  "sandbox/boot-ready.js",
 
   "pysec/goar-kit.js",
   "pysec/embed-data.js",

@@ -3,16 +3,22 @@ async function runSetup() {
   try {
     if (typeof WebAssembly === "undefined" || typeof WebAssembly.instantiate !== "function") {
       throw new Error(
-        "This browser has no WebAssembly API (needed for the Alpine sandbox: v86.wasm). " +
-        "Use a current Chrome / Edge / Firefox / Safari. Not a missing download."
+        "This browser has no WebAssembly API (needed for Pyodide and the Unix plane). " +
+        "Use a current Chrome / Edge / Firefox / Safari."
       );
     }
     initTerm();
-    if (typeof loadAll !== "function") {
-      throw new Error("loadAll is not defined — src/boot/load-assets.js failed to load. Check the console for a script error.");
+    if (typeof bootWasmUnix !== "function") {
+      throw new Error("Unix plane failed to load.");
     }
-    const buffers = await loadAll();
-    await boot(buffers);
+    await bootWasmUnix();
+    try {
+      if (typeof waitForGoarReady === "function") await waitForGoarReady(90000);
+    } catch (e) {
+      console.warn("[goar] ready gate", e);
+    }
+    try { if (typeof setProgress === "function") setProgress(100, "Ready", ""); } catch (_) {}
+    try { if (typeof showCredPhase === "function") showCredPhase(); } catch (_) {}
   } catch (e) {
     console.error(e);
     showErr((e && e.message) ? e.message : String(e));
