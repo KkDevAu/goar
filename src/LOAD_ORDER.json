@@ -48,6 +48,8 @@
 
   "sandbox/jlite-drive.js",
   "sandbox/py-runtime.js",
+  "sandbox/goar-kernel.src.js",
+  "sandbox/kernel-bridge.js",
   "sandbox/wasm-unix.js",
   "sandbox/guest-exec.js",
   "sandbox/guest-fs-tools.js",

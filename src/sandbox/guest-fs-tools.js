@@ -1,23 +1,42 @@
 async function toolBash(args) {
-  if (!envReady && window.__emulator) { try { window.__goarMarkEnvReady?.(true, "lazy bash"); } catch (_) {} }
-  if (!envReady && !window.__emulator) return "error: guest environment not ready yet";
+  if (!envReady && (window.__emulator || window.__GOAR_UNIX)) { try { window.__goarMarkEnvReady?.(true, "lazy bash"); } catch (_) {} }
+  if (!envReady && !(window.__emulator || window.__GOAR_UNIX)) return "error: guest environment not ready yet";
   let cmd = (args.command || args.cmd || "").trim();
   if (!cmd) return "error: empty command";
   if (/\b(pip|apk|curl|wget)\b/i.test(cmd)) {
     try { await ensureGuestNet(); } catch (_) {}
+  }
+  const simplePip = /^\s*(?:python3?\s+-m\s+)?pip3?\s+install\b/.test(cmd)
+    && !/--no-index|-r\s|--requirement|--find-links|-e\s|--editable|--target|--prefix|--user/.test(cmd);
+  if (simplePip && typeof guestPipInstall === "function") {
+    const spec = cmd
+      .replace(/^\s*(?:python3?\s+-m\s+)?pip3?\s+install\b/, "")
+      .replace(/--break-system-packages|--disable-pip-version-check|--no-input|--no-cache-dir|-q|--quiet|--upgrade|-U/g, "")
+      .trim();
+    const r = await guestPipInstall(spec, Number(args.timeout_ms || 300000));
+    return (r.ok ? "ok via " + (r.via || "pip") : "failed") + "\n" + String(r.output || r.error || JSON.stringify(r)).slice(0, 8000);
+  }
+  if (/^\s*pip3?(?:\s|$)/.test(cmd) || /\bpip3?\s+install\b/.test(cmd)) {
+    cmd = cmd.replace(/^\s*pip3?/, "python3 -m pip").replace(
+      /\bpip3?\s+install\b/,
+      "python3 -m pip install --break-system-packages"
+    );
+    if (!/--break-system-packages/.test(cmd) && /\sinstall\b/.test(cmd)) {
+      cmd = cmd.replace(/\sinstall\b/, " install --break-system-packages");
+    }
   }
   const r = await guestExec(cmd, Number(args.timeout_ms || 300000));
   return "exit " + r.code + "\n" + r.output;
 }
 
 async function toolWrite(args) {
-  if (!envReady && window.__emulator) { try { window.__goarMarkEnvReady?.(true, "lazy write"); } catch (_) {} }
-  if (!envReady && !window.__emulator) return "error: guest environment not ready yet";
+  if (!envReady && (window.__emulator || window.__GOAR_UNIX)) { try { window.__goarMarkEnvReady?.(true, "lazy write"); } catch (_) {} }
+  if (!envReady && !(window.__emulator || window.__GOAR_UNIX)) return "error: guest environment not ready yet";
   const path = (args.path || "").trim();
   let content = args.content ?? "";
   if (!path) return "error: path required";
   content = String(content);
-  const emu = window.__emulator || (typeof emulator !== "undefined" ? emulator : null);
+  const emu = window.__emulator || window.__GOAR_UNIX || (typeof emulator !== "undefined" ? emulator : null);
   if (!emu) return "error: emulator missing";
 
   try { emu.serial0_send("\u0003"); } catch (_) {}
@@ -59,6 +78,7 @@ async function toolWrite(args) {
     return s && !s.startsWith("printf %s") && !s.includes("/tmp/.gw") && !s.includes("/tmp/.gpath") && s !== start && !s.startsWith(end);
   }).join("\n").trim();
   if (!m) return "error: write timed out for " + path + "\n" + body.slice(-400);
+  try { window.__GOAR_LAST_WRITE = { path: path, content: content, at: Date.now() }; } catch (_) {}
   return body || (content.length + " " + path + "\nOK");
 }
 
@@ -117,13 +137,24 @@ async function toolWebFetch(args) {
   const url = (args.url || "").trim();
   const max = Math.min(Number(args.max_chars || 12000), 50000);
   if (!/^https?:\/\//i.test(url)) return "error: http(s) url required";
+  const render = args.render !== false && args.render !== "false";
+  const extract = args.extract || args.selector ? (args.extract || "1") : "";
   try {
     if (typeof goarHostFetch === "function") {
-      const r = await goarHostFetch(url, { method: "GET", maxBytes: max });
+      const r = await goarHostFetch(url, {
+        method: "GET",
+        maxBytes: max,
+        render: render,
+        extract: extract,
+        selector: args.selector || "",
+        ttl: args.ttl,
+        input: args.input,
+        output: args.output,
+      });
       if (r && (r.ok || r.status)) {
         let text = r.body || "";
         const ct = (r.headers && (r.headers["content-type"] || r.headers["Content-Type"])) || "";
-        if (String(ct).includes("html") || /<html/i.test(text.slice(0, 200))) {
+        if (!extract && (String(ct).includes("html") || /<html/i.test(text.slice(0, 200)))) {
           text = text.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
         }
         return "HTTP " + r.status + " " + url + " [" + (r.via || "?") + "]\n\n" + text.slice(0, max);
@@ -140,7 +171,7 @@ async function toolWebFetch(args) {
     return "HTTP " + r.status + " " + url + " [browser-cors]\n\n" + text.slice(0, max);
   } catch (e) {
     try {
-      if (typeof toolGuestHttp === "function" && (envReady || window.__emulator)) {
+      if (typeof toolGuestHttp === "function" && (envReady || window.__emulator || window.__GOAR_UNIX)) {
         const g = await toolGuestHttp({ url, method: "GET", max_bytes: max });
         return "[via guest]\n" + String(g).slice(0, max + 200);
       }
@@ -152,16 +183,27 @@ async function toolWebFetch(args) {
 }
 
 async function toolPython(args) {
-  if (!envReady && window.__emulator) { try { window.__goarMarkEnvReady?.(true, "lazy python"); } catch (_) {} }
-  if (!envReady && !window.__emulator) return "error: guest environment not ready yet";
+  if (!envReady && (window.__emulator || window.__GOAR_UNIX)) { try { window.__goarMarkEnvReady?.(true, "lazy python"); } catch (_) {} }
+  if (!envReady && !(window.__emulator || window.__GOAR_UNIX)) return "error: guest environment not ready yet";
   const path = (args.path || "").trim();
   const code = args.code || "";
   const argv = args.args || "";
+  if (!path && code && typeof goarKernel === "function") {
+    try {
+      const r = await goarKernel("exec", { code: String(code) });
+      if (r && (r.ok || r.stdout != null || r.stderr != null)) {
+        const bits = [];
+        if (r.stdout) bits.push(String(r.stdout));
+        if (r.stderr) bits.push(String(r.stderr));
+        if (!bits.length && r.result != null) bits.push(typeof r.result === "string" ? r.result : JSON.stringify(r.result));
+        return bits.join("") || (r.ok ? "" : JSON.stringify(r));
+      }
+    } catch (_) {}
+  }
   let cmd;
   if (path) {
     cmd = "python3 " + JSON.stringify(path) + (argv ? " " + argv : "");
   } else if (code) {
-    // Multiline-safe: stage to temp file (python -c breaks on embedded newlines via serial)
     await toolWrite({ path: "/tmp/.goar_py_exec.py", content: String(code) });
     cmd = "python3 /tmp/.goar_py_exec.py" + (argv ? " " + argv : "");
   } else return "error: code or path required";
@@ -170,8 +212,8 @@ async function toolPython(args) {
 }
 
 async function toolEdit(args) {
-  if (!envReady && window.__emulator) { try { window.__goarMarkEnvReady?.(true, "lazy toolEdit"); } catch (_) {} }
-  if (!envReady && !window.__emulator) return "error: guest environment not ready yet";
+  if (!envReady && (window.__emulator || window.__GOAR_UNIX)) { try { window.__goarMarkEnvReady?.(true, "lazy toolEdit"); } catch (_) {} }
+  if (!envReady && !(window.__emulator || window.__GOAR_UNIX)) return "error: guest environment not ready yet";
   const path = (args.path || "").trim();
   const oldS = args.old_string ?? args.oldString ?? "";
   const newS = args.new_string ?? args.newString ?? "";
@@ -220,8 +262,8 @@ async function toolMkdir(args) {
   return "exit " + r.code + "\n" + r.output;
 }
 async function toolGlob(args) {
-  if (!envReady && window.__emulator) { try { window.__goarMarkEnvReady?.(true, "lazy glob"); } catch (_) {} }
-  if (!envReady && !window.__emulator) return "error: guest not ready";
+  if (!envReady && (window.__emulator || window.__GOAR_UNIX)) { try { window.__goarMarkEnvReady?.(true, "lazy glob"); } catch (_) {} }
+  if (!envReady && !(window.__emulator || window.__GOAR_UNIX)) return "error: guest not ready";
   let root = (args.root || "/workspace").trim();
   let pattern = (args.pattern || args.glob || "*").trim();
   // Support absolute patterns like /workspace/e2e_suite/**
@@ -282,7 +324,7 @@ async function toolHttp(args) {
     return "HTTP " + r.status + " [browser-cors]\n" + (await r.text()).slice(0, max);
   } catch (e) {
     try {
-      if (typeof toolGuestHttp === "function" && (envReady || window.__emulator)) {
+      if (typeof toolGuestHttp === "function" && (envReady || window.__emulator || window.__GOAR_UNIX)) {
         const g = await toolGuestHttp({
           url,
           method,

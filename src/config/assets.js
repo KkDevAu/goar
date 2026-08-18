@@ -42,6 +42,8 @@ const HEAVY = {
   libcurlJs: goarAssetUrl("assets/net/libcurl.mjs"),
   epoxy: goarAssetUrl("assets/net/epoxy/epoxy-bundled.js"),
   pyodide: goarUseCdn() ? GOAR_REMOTE + "assets/pyodide/" : "./assets/pyodide/",
+  kernel: goarAssetUrl("assets/kernel/goar-kernel.py"),
+  secPack: goarAssetUrl("assets/pyodide/pyodide-security.zip"),
   pack: goarAssetUrl("goar.pack.zip"),
   logo: GOAR_LOGO,
 };
@@ -61,6 +63,8 @@ const HEAVY_REMOTE = {
   epoxy: GOAR_REMOTE + "assets/net/epoxy/epoxy-bundled.js",
   pyodide: GOAR_REMOTE + "assets/pyodide/",
   pack: GOAR_REMOTE + "goar.pack.zip",
+  kernel: GOAR_REMOTE + "assets/kernel/goar-kernel.py",
+  secPack: GOAR_REMOTE + "assets/pyodide/pyodide-security.zip",
   logo: GOAR_REMOTE + "assets/brand/g.png",
 };
 

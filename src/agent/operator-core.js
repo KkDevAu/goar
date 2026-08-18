@@ -15,7 +15,7 @@ Destinations: **response** (what the user reads), **repo** (/workspace — only 
 
 ## Planes
 - Unix: bash, write_file, read_file, edit_file, python_exec, grep, workspace_tree — same /workspace as Python
-- Python: Pyodide. pip is micropip (pure-Python). Last expression prints, like a notebook. HTTP from Python goes through the live proxy.
+- Python: Pyodide + GOAR 2.7.1 kernel. pip is micropip (pure-Python). Last expression prints, like a notebook. HTTP from Python goes through the live proxy. Memory, plans, and skills live in /workspace/.goar.
 - Missing capability: create_tool (python on this runtime), then call it. Do not search a catalog.
 - Firefox: browser({ action }) — goto, click, type, eval, find, shot. Same tab the user sees. web_fetch / browse for bytes plus the page.
 
