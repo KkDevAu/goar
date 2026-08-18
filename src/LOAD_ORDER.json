@@ -56,6 +56,7 @@
   "sandbox/guest-exec.js",
   "sandbox/guest-fs-tools.js",
   "sandbox/boot-ready.js",
+  "sandbox/preload-peak.js",
 
   "pysec/goar-kit.js",
   "pysec/embed-data.js",

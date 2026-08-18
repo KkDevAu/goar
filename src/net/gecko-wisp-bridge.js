@@ -165,4 +165,5 @@
 
   global.installGeckoWispBridge = installGeckoWispBridge;
   global.ensureGoarEpoxy = ensureEpoxy;
+  global.ensureEpoxy = ensureEpoxy;
 })(typeof window !== "undefined" ? window : globalThis);

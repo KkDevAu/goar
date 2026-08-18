@@ -268,10 +268,20 @@ if not hasattr(hashlib, "pbkdf2_hmac"):
       await Promise.resolve(__pyodide.FS.writeFile(full, data));
     }
     await __pyodide.runPythonAsync(`
-import sys
+import sys, importlib, pkgutil
 sys.path.insert(0, "/home/pyodide")
 import pyodide_security as ps
-print("pysec", ps.VERSION, "tools", len(ps.list_tools()))
+for info in pkgutil.walk_packages(ps.__path__, ps.__name__ + "."):
+    try:
+        importlib.import_module(info.name)
+    except Exception:
+        pass
+try:
+    from pyodide_security import policy
+    policy.configure(max_requests=400, allow_active_scanning=True, reset_budget=True)
+except Exception:
+    pass
+print("pysec", getattr(ps, "VERSION", "?"), "tools", len(ps.list_tools()))
 `);
     __pysecReady = true;
     try { window.__pysecReady = true; } catch (_) {}
