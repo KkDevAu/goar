@@ -1,12 +1,8 @@
 /**
- * GOAR host network fabric — one path, discovered fallbacks.
+ * GOAR host network fabric — cors.manus.space stack.
  *
- *   libcurl.js (packaged ESM) + Wisp  → TLS in-browser
- *   same-origin /api/cors-proxy       → Manus-shaped local hop
- *   bare CORS                         → when the origin allows it
- *   open GET relays                   → last resort only
- *
- * No second stack. Wisp endpoints are probed; first that opens wins.
+ *   HTTP  ALL /api/proxy/:targetUrl   x-api-key · render · extract · ttl
+ *   WISP  wss://cors.manus.space/wisp/   Alpine + libcurl + epoxy
  */
 
 const MW_FABRIC = {
@@ -26,17 +22,9 @@ const MANUS_LS_LEGACY = "goar_manus_key";
 
 const DEFAULT_WISP_POOL = [
   "wss://cors.manus.space/wisp/",
-  "wss://wisp.mercurywork.shop/",
 ];
 const MANUS_ORIGIN = (typeof window !== "undefined" && window.GOAR_MANUS_ORIGIN) || "https://cors.manus.space";
 const MANUS_PROXY = (typeof window !== "undefined" && window.GOAR_CORS_PROXY) || (MANUS_ORIGIN + "/api/proxy");
-
-
-const CORS_RELAYS = [
-  { id: "allorigins", wrap: (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u) },
-  { id: "corsproxy", wrap: (u) => "https://corsproxy.io/?" + encodeURIComponent(u) },
-  { id: "codetabs", wrap: (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u) },
-];
 
 function normalizeWispUrl(u) {
   u = String(u || "").trim();
@@ -55,26 +43,29 @@ function normalizeWispUrl(u) {
   return u;
 }
 
+function manusWispUrl(key) {
+  const base = "wss://cors.manus.space/wisp/";
+  const k = String(key || "").trim();
+  if (!k) return base;
+  return base + (base.indexOf("?") >= 0 ? "&" : "?") + "apikey=" + encodeURIComponent(k);
+}
+
 function wispPool() {
   const pool = [];
   const push = (u) => {
     const n = normalizeWispUrl(u);
     if (n && pool.indexOf(n) === -1) pool.push(n);
   };
+  const key = readManusKey();
+  push(manusWispUrl(key));
   try {
     const s = typeof loadSettings === "function" ? loadSettings() : {};
     if (s && s.wispUrl) push(s.wispUrl);
   } catch (_) {}
-  try {
-    const saved = localStorage.getItem("goar_wisp_url");
-    if (saved) push(saved);
-  } catch (_) {}
-  if (typeof window !== "undefined" && window.GOAR_WISP_URL) push(window.GOAR_WISP_URL);
-  if (typeof NET_RELAY !== "undefined") push(NET_RELAY);
-  if (typeof NET_RELAYS !== "undefined" && Array.isArray(NET_RELAYS)) {
-    NET_RELAYS.forEach(push);
+  if (typeof window !== "undefined" && window.GOAR_WISP_URL) {
+    const forced = String(window.GOAR_WISP_URL);
+    push(key && /cors\.manus\.space\/wisp/i.test(forced) ? manusWispUrl(key) : forced);
   }
-  DEFAULT_WISP_POOL.forEach(push);
   return pool;
 }
 
@@ -110,10 +101,14 @@ async function pickWispUrl() {
     MW_FABRIC.wispTried.push(p);
     if (p.ok) {
       try { localStorage.setItem("goar_wisp_url", url); } catch (_) {}
+      MW_FABRIC.wispUrl = url;
       return url;
     }
+    try {
+      if (localStorage.getItem("goar_wisp_url") === url) localStorage.removeItem("goar_wisp_url");
+    } catch (_) {}
   }
-  return pool[0] || DEFAULT_WISP_POOL[0];
+  return "";
 }
 
 function resolveWispUrl() {
@@ -145,6 +140,7 @@ async function loadLibcurlEngine(wispUrl) {
   lc.set_websocket(wispUrl);
   MW_FABRIC.libcurl = lc;
   MW_FABRIC.engine = "libcurl";
+  try { globalThis.__GOAR_LIBCURL = lc; } catch (_) {}
   return lc;
 }
 
@@ -157,12 +153,12 @@ async function ensureMwFabric(opts) {
   if (MW_FABRIC.loading) return MW_FABRIC.loading;
   MW_FABRIC.loading = (async () => {
     MW_FABRIC.lastError = "";
+    try { await mintManusKey(); } catch (_) {}
     const wisp = await pickWispUrl();
     MW_FABRIC.wispUrl = wisp;
     try {
-      await loadLibcurlEngine(wisp);
+      if (wisp) await loadLibcurlEngine(wisp);
       MW_FABRIC.ready = true;
-      try { await mintManusKey(); } catch (_) {}
       await probeMwFabric();
       console.log("[goar] fabric ready via", MW_FABRIC.engine, wisp);
       return mwFabricStatus();
@@ -202,7 +198,7 @@ function mwFabricStatus() {
     wispTried: MW_FABRIC.wispTried.slice(),
     lastError: MW_FABRIC.lastError || null,
     probe: MW_FABRIC.probe,
-    stack: "libcurl+Wisp · /api/cors-proxy · CORS · GET relay",
+    stack: "cors.manus.space /api/proxy · wisp · libcurl",
   };
 }
 
@@ -223,22 +219,31 @@ function persistManusKey(key) {
 async function mintManusKey() {
   const have = readManusKey();
   if (have && /^cpx_/.test(have)) return have;
-  const body = JSON.stringify({ json: { label: "goar" } });
-  const url = MANUS_ORIGIN + "/api/trpc/apiKey.generate";
   async function parseKey(text) {
     try {
       const j = JSON.parse(text);
       return (
-        j &&
-        j.result &&
-        j.result.data &&
-        j.result.data.json &&
-        j.result.data.json.key
-      ) || "";
+        (j && j.key) ||
+        (j && j.result && j.result.data && j.result.data.json && j.result.data.json.key) ||
+        ""
+      );
     } catch (_) {
       return "";
     }
   }
+  try {
+    const local = new URL("/api/manus-key", location.href).href;
+    const r = await fetch(local, { method: "POST", headers: { accept: "application/json" } });
+    const key = await parseKey(await r.text());
+    if (key && /^cpx_/.test(key)) {
+      persistManusKey(String(key));
+      return String(key);
+    }
+  } catch (e) {
+    console.warn("[goar] manus key mint via host", e);
+  }
+  const body = JSON.stringify({ json: { label: "goar" } });
+  const url = MANUS_ORIGIN + "/api/trpc/apiKey.generate";
   try {
     if (MW_FABRIC.libcurl && MW_FABRIC.libcurl.fetch) {
       const res = await MW_FABRIC.libcurl.fetch(url, {
@@ -277,20 +282,60 @@ async function manusHttpFetch(url, opts) {
   const key = await mintManusKey();
   if (!key) return null;
   const method = String(opts.method || "GET").toUpperCase();
-  const target = MANUS_PROXY.replace(/\/$/, "") + "/" + String(url).replace(/^\/+/, "");
-  const headers = Object.assign({}, opts.headers || {}, { "x-api-key": key });
+  const hop = buildManusProxyUrl(url, {
+    render: opts.render,
+    extract: opts.extract,
+    selector: opts.selector,
+    ttl: opts.ttl,
+    method: method !== "GET" && method !== "HEAD" ? method : "",
+    input: opts.input,
+    output: opts.output,
+    reqHeaders: opts.reqHeaders,
+    resHeaders: opts.resHeaders,
+  });
+  const headers = Object.assign({}, opts.headers || {}, {
+    "x-api-key": key,
+    "x-target-url": String(url),
+  });
   const init = { method, headers };
   if (opts.body != null && method !== "GET" && method !== "HEAD") init.body = opts.body;
-  const res = await fetch(target, init);
+  const res = await fetch(hop, init);
   const text = await res.text();
   return {
     ok: res.status >= 200 && res.status < 400,
     status: res.status,
     headers: { "content-type": res.headers.get("content-type") || "" },
     body: text,
-    via: "manus-proxy",
+    via: opts.render ? "manus-proxy+render" : "manus-proxy",
     url,
   };
+}
+
+function buildManusProxyUrl(target, extra) {
+  extra = extra || {};
+  const origin = String(MANUS_ORIGIN || "https://cors.manus.space").replace(/\/$/, "");
+  const dest = String(target || "").trim();
+  let path = "/api/proxy/" + dest.replace(/^\/+/, "");
+  const q = [];
+  const add = (k, v) => {
+    if (v == null || v === "" || v === false) return;
+    q.push(encodeURIComponent(k) + "=" + encodeURIComponent(v === true ? "true" : String(v)));
+  };
+  if (extra.render) add("render", "true");
+  if (extra.extract) add("extract", extra.extract === true ? "1" : String(extra.extract));
+  if (extra.selector) add("selector", extra.selector);
+  if (extra.ttl) add("ttl", extra.ttl);
+  if (extra.method) add("method", extra.method);
+  if (extra.input) add("input", extra.input);
+  if (extra.output) add("output", extra.output);
+  if (extra.reqHeaders) {
+    add("reqHeaders", typeof extra.reqHeaders === "string" ? extra.reqHeaders : JSON.stringify(extra.reqHeaders));
+  }
+  if (extra.resHeaders) {
+    add("resHeaders", typeof extra.resHeaders === "string" ? extra.resHeaders : JSON.stringify(extra.resHeaders));
+  }
+  if (!q.length) return origin + path;
+  return origin + path + (path.indexOf("?") >= 0 ? "&" : "?") + q.join("&");
 }
 
 function readManusKey() {
@@ -366,6 +411,29 @@ async function goarHostFetch(url, opts) {
     try { await ensureMwFabric(); } catch (_) {}
   }
 
+  try {
+    const man = await manusHttpFetch(url, {
+      method,
+      headers,
+      body,
+      render: opts.render,
+      extract: opts.extract,
+      selector: opts.selector,
+      ttl: opts.ttl,
+      input: opts.input,
+      output: opts.output,
+      reqHeaders: opts.reqHeaders || headers,
+      resHeaders: opts.resHeaders,
+    });
+    if (man && (man.body || man.ok || man.status)) {
+      man.body = String(man.body || "").slice(0, maxBytes);
+      man.ms = Math.round(performance.now() - t0);
+      return man;
+    }
+  } catch (e) {
+    MW_FABRIC.lastError = String(e && e.message ? e.message : e);
+  }
+
   if (MW_FABRIC.engine === "libcurl" && MW_FABRIC.libcurl) {
     try {
       const init = { method, headers };
@@ -414,50 +482,6 @@ async function goarHostFetch(url, opts) {
   }
 
   try {
-    const man = await manusHttpFetch(url, { method, headers, body });
-    if (man && man.body) {
-      man.body = String(man.body).slice(0, maxBytes);
-      man.ms = Math.round(performance.now() - t0);
-      return man;
-    }
-  } catch (e) {
-    MW_FABRIC.lastError = String(e && e.message ? e.message : e);
-  }
-
-  try {
-    const origin = typeof location !== "undefined" ? location.origin : "";
-    if (origin) {
-      const proxyUrl =
-        origin +
-        "/api/cors-proxy?url=" +
-        encodeURIComponent(url) +
-        (method !== "GET" && method !== "HEAD" ? "&method=" + encodeURIComponent(method) : "") +
-        "&apikey=goar_fabric";
-      const init = {
-        method: method === "HEAD" ? "GET" : method,
-        headers: { "x-api-key": "goar_fabric", "x-target-url": url },
-      };
-      if (body != null && method !== "GET" && method !== "HEAD") {
-        init.body = body;
-        if (headers["Content-Type"] || headers["content-type"]) {
-          init.headers["Content-Type"] = headers["Content-Type"] || headers["content-type"];
-        }
-      }
-      const res = await fetch(proxyUrl, init);
-      const text = await res.text();
-      return {
-        ok: res.status >= 200 && res.status < 400,
-        status: res.status,
-        headers: { "content-type": res.headers.get("content-type") || "" },
-        body: text.slice(0, maxBytes),
-        via: "cors-proxy",
-        ms: Math.round(performance.now() - t0),
-        url,
-      };
-    }
-  } catch (_) {}
-
-  try {
     const init = { method, headers, mode: "cors" };
     if (body != null && method !== "GET" && method !== "HEAD") init.body = body;
     const res = await fetch(url, init);
@@ -473,38 +497,58 @@ async function goarHostFetch(url, opts) {
     };
   } catch (_) {}
 
-  if (method === "GET" || method === "HEAD") {
-    for (const relay of CORS_RELAYS) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 12000);
-        const res = await fetch(relay.wrap(url), { method: "GET", signal: ctrl.signal, credentials: "omit" });
-        clearTimeout(t);
-        const text = await res.text();
-        if (!res.ok && res.status >= 500) continue;
-        return {
-          ok: true,
-          status: res.status || 200,
-          headers: { "content-type": res.headers.get("content-type") || "" },
-          body: text.slice(0, maxBytes),
-          via: "relay:" + relay.id,
-          ms: Math.round(performance.now() - t0),
-          url,
-        };
-      } catch (_) {}
-    }
-  }
-
   return {
     ok: false,
     status: 0,
     headers: {},
     body: "",
-    error: MW_FABRIC.lastError || "all hops failed",
+    error: MW_FABRIC.lastError || "proxy hop failed",
     via: "failed",
     ms: Math.round(performance.now() - t0),
     url,
   };
+}
+
+async function goarHostFetchBytes(url) {
+  const t0 = performance.now();
+  url = String(url || "").trim();
+  if (!url) return { ok: false, error: "url required", bytes: null };
+  if (!MW_FABRIC.ready) {
+    try { await ensureMwFabric(); } catch (_) {}
+  }
+  const key = readManusKey();
+  const hop = buildManusProxyUrl(url);
+  const headers = key ? { "x-api-key": key, "x-target-url": url } : {};
+  try {
+    const res = await fetch(hop, { headers });
+    if (res.ok) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.byteLength) {
+        return { ok: true, status: res.status, bytes: buf, via: "manus-proxy", ms: Math.round(performance.now() - t0), url };
+      }
+    }
+  } catch (e) {
+    MW_FABRIC.lastError = String(e && e.message ? e.message : e);
+  }
+  if (MW_FABRIC.libcurl && MW_FABRIC.libcurl.fetch) {
+    try {
+      const res = await MW_FABRIC.libcurl.fetch(url);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (res.status >= 200 && res.status < 400 && buf.byteLength) {
+        return { ok: true, status: res.status, bytes: buf, via: "libcurl+wisp", ms: Math.round(performance.now() - t0), url };
+      }
+    } catch (e) {
+      MW_FABRIC.lastError = String(e && e.message ? e.message : e);
+    }
+  }
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (res.ok) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      return { ok: true, status: res.status, bytes: buf, via: "browser-cors", ms: Math.round(performance.now() - t0), url };
+    }
+  } catch (_) {}
+  return { ok: false, error: MW_FABRIC.lastError || "binary fetch failed", bytes: null, via: "failed", url };
 }
 
 async function goarHostFetchJson(url, method, headersJson, body) {
@@ -520,6 +564,7 @@ try {
   window.MW_FABRIC = MW_FABRIC;
   window.ensureMwFabric = ensureMwFabric;
   window.goarHostFetch = goarHostFetch;
+  window.goarHostFetchBytes = goarHostFetchBytes;
   window.goarHostFetchJson = goarHostFetchJson;
   window.mwFabricStatus = mwFabricStatus;
   window.resolveWispUrl = resolveWispUrl;
@@ -529,6 +574,7 @@ try {
   window.persistManusKey = persistManusKey;
   window.mintManusKey = mintManusKey;
   window.manusHttpFetch = manusHttpFetch;
+  window.manusWispUrl = manusWispUrl;
 } catch (_) {}
 
 try { window.goarLoopbackFetch = goarLoopbackFetch; } catch (_) {}

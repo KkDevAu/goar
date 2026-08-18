@@ -28,15 +28,12 @@
   "net/viz-plane.js",
   "net/page-plane.js",
   "net/eruda-plane.js",
+  "net/gecko-wisp-bridge.js",
   "net/gecko-plane.js",
-  "net/live-browser.js",
   "net/gecko-menu.js",
   "net/gecko-features.js",
 
   "boot/inflate.js",
-  "boot/load-assets.js",
-  "boot/start-v86.js",
-  "sandbox/guest-boot-sequence.js",
   "boot/run-setup.js",
 
   "agent/operator-core.js",
@@ -49,6 +46,9 @@
   "agent/framework/extension.js",
   "agent/framework/system-plane.js",
 
+  "sandbox/jlite-drive.js",
+  "sandbox/py-runtime.js",
+  "sandbox/wasm-unix.js",
   "sandbox/guest-exec.js",
   "sandbox/guest-fs-tools.js",
 
