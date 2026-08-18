@@ -43,6 +43,17 @@
     const py = global.__pyodide || (typeof unixPy === "function" ? unixPy() : null);
     if (!py) return { ok: false, error: "python not ready" };
     try {
+      if (String(op || "") === "exec" && payload && /\bawait\b/.test(String(payload.code || ""))) {
+        const src = String(payload.code || "");
+        const wrapped =
+          "import json as _j\n" +
+          "async def __goar_main():\n" +
+          src.split("\n").map((l) => "    " + l).join("\n") + "\n" +
+          "_r = await __goar_main()\n" +
+          "(_j.dumps(_r, default=str) if _r is not None else '')\n";
+        const raw = await py.runPythonAsync(wrapped);
+        return { ok: true, stdout: raw == null ? "" : String(raw), stderr: "", result: raw };
+      }
       if (py.globals && py.globals.set) {
         py.globals.set("_k_op", String(op || ""));
         py.globals.set("_k_pl", JSON.stringify(payload || {}));

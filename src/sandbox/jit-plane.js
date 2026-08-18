@@ -55,6 +55,9 @@
 
   function asArr(x) {
     if (!x) return [];
+    if (x && typeof x.toJs === "function") {
+      try { x = x.toJs(); } catch (_) {}
+    }
     if (Array.isArray(x)) return x.map(Number);
     if (typeof x === "string") {
       try { return JSON.parse(x).map(Number); } catch (_) { return []; }
@@ -63,8 +66,28 @@
     return [];
   }
 
+  function unwrapPayload(payload) {
+    if (!payload) return {};
+    if (typeof payload.toJs === "function") {
+      try { return payload.toJs({ dict_converter: Object.fromEntries }) || {}; } catch (_) {}
+    }
+    if (typeof payload.get === "function" && !Array.isArray(payload)) {
+      const o = {};
+      try {
+        ["a", "b", "y", "x", "k"].forEach((k) => {
+          if (payload.has && payload.has(k)) o[k] = payload.get(k);
+        });
+        return o;
+      } catch (_) {}
+    }
+    return payload;
+  }
+
   function goarJit(op, payload) {
-    payload = payload || {};
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch (_) { payload = {}; }
+    }
+    payload = unwrapPayload(payload || {});
     const o = String(op || "");
     if (o === "status") {
       ensureJit();
@@ -122,7 +145,7 @@
     "from js import goarJit as _jit",
     "",
     "def _call(op, **kw):",
-    "    r = _jit(op, kw)",
+    "    r = _jit(op, json.dumps(kw))",
     "    if hasattr(r, 'to_py'):",
     "        r = r.to_py()",
     "    return r",

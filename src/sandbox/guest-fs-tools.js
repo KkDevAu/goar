@@ -36,8 +36,13 @@ async function toolWrite(args) {
   let content = args.content ?? "";
   if (!path) return "error: path required";
   content = String(content);
-  const emu = window.__emulator || window.__GOAR_UNIX || (typeof emulator !== "undefined" ? emulator : null);
-  if (!emu) return "error: emulator missing";
+  if (typeof unixWrite === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    unixWrite(path, content);
+    try { window.__GOAR_LAST_WRITE = { path: path, content: content, at: Date.now() }; } catch (_) {}
+    return content.length + " " + path + "\nOK";
+  }
+  const emu = window.__emulator || (typeof emulator !== "undefined" ? emulator : null);
+  if (!emu) return "error: filesystem missing";
 
   try { emu.serial0_send("\u0003"); } catch (_) {}
   await sleep(80);
@@ -85,6 +90,13 @@ async function toolWrite(args) {
 async function toolRead(args) {
   const path = (args.path || "").trim();
   const maxb = Math.min(Number(args.max_bytes || 80000), 200000);
+  if (typeof unixRead === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    try {
+      return String(unixRead(path, false)).slice(0, maxb);
+    } catch (e) {
+      return "error: " + (e && e.message ? e.message : e);
+    }
+  }
   const r = await guestExec("head -c " + maxb + " " + JSON.stringify(path), 30000);
   return r.output;
 }
@@ -137,7 +149,7 @@ async function toolWebFetch(args) {
   const url = (args.url || "").trim();
   const max = Math.min(Number(args.max_chars || 12000), 50000);
   if (!/^https?:\/\//i.test(url)) return "error: http(s) url required";
-  const render = args.render !== false && args.render !== "false";
+  const render = args.render === true || args.render === "true";
   const extract = args.extract || args.selector ? (args.extract || "1") : "";
   try {
     if (typeof goarHostFetch === "function") {
@@ -220,6 +232,17 @@ async function toolEdit(args) {
   const all = !!(args.replace_all || args.replaceAll);
   if (!path) return "error: path required";
   if (oldS === "") return "error: old_string required";
+  if (typeof unixRead === "function" && typeof unixWrite === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    let t;
+    try { t = String(unixRead(path, false)); } catch (e) {
+      return "error: " + (e && e.message ? e.message : e);
+    }
+    const c = all ? t.split(oldS).length - 1 : (t.indexOf(oldS) >= 0 ? 1 : 0);
+    if (!c) return "error: old_string not found";
+    t = all ? t.split(oldS).join(newS) : t.replace(oldS, newS);
+    unixWrite(path, t);
+    return "matches " + c + "\nok";
+  }
   // Multiline-safe: write helper script (python -c breaks over serial)
   const py =
     "import pathlib,sys\n" +

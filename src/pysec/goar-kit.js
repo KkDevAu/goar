@@ -34,9 +34,26 @@ async function toolWorkspaceTree(args) {
   const path = String((args && args.path) || "/workspace");
   const depth = Math.max(1, Math.min(6, Number((args && args.depth) || 3)));
   const limit = Math.max(20, Math.min(400, Number((args && args.limit) || 220)));
+  const root = path.replace(/\/+$/, "") || "/workspace";
+  const lines = [];
+  if (typeof Unix !== "undefined" && Unix.jsfs) {
+    const keys = [];
+    Unix.jsfs.forEach((_, p) => {
+      if (p === root || p.indexOf(root + "/") === 0) keys.push(p);
+    });
+    keys.sort();
+    for (const p of keys) {
+      const rel = p === root ? root : p;
+      const segs = p === root ? 0 : p.slice(root.length + 1).split("/").length;
+      if (segs > depth) continue;
+      lines.push(rel);
+      if (lines.length >= limit) break;
+    }
+  }
+  if (lines.length) return lines.join("\n");
   if (typeof guestExec !== "function") return "error: guest down";
   const r = await guestExec(
-    "find " + path.replace(/'/g, "") + " -maxdepth " + depth + " 2>/dev/null | head -n " + limit,
+    "ls -la " + JSON.stringify(root),
     12000
   );
   const out = (r && r.output != null) ? r.output : String(r || "");

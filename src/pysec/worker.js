@@ -271,6 +271,18 @@ if not hasattr(hashlib, "pbkdf2_hmac"):
 import sys, importlib, pkgutil
 sys.path.insert(0, "/home/pyodide")
 import pyodide_security as ps
+try:
+    from pyodide_security import _KW_ALIASES
+    _KW_ALIASES.setdefault("text", ("data", "text", "content"))
+    _KW_ALIASES.setdefault("data", ("data", "text"))
+    _KW_ALIASES.setdefault("policy", ("csp", "policy"))
+    _KW_ALIASES.setdefault("csp", ("csp", "policy"))
+    _KW_ALIASES.setdefault("encoding", ("format", "encoding"))
+    _KW_ALIASES.setdefault("format", ("format", "encoding"))
+    _KW_ALIASES.setdefault("algo", ("algorithm", "algo"))
+    _KW_ALIASES.setdefault("algorithm", ("algorithm", "algo"))
+except Exception:
+    pass
 for info in pkgutil.walk_packages(ps.__path__, ps.__name__ + "."):
     try:
         importlib.import_module(info.name)
@@ -305,6 +317,18 @@ async function hardenLivePysecTools() {
   await __pyodide.runPythonAsync(`
 import asyncio, inspect
 from pyodide_security import _BY_ID
+try:
+    from pyodide_security import _KW_ALIASES
+    _KW_ALIASES.setdefault("text", ("data", "text", "content"))
+    _KW_ALIASES.setdefault("data", ("data", "text"))
+    _KW_ALIASES.setdefault("policy", ("csp", "policy"))
+    _KW_ALIASES.setdefault("csp", ("csp", "policy"))
+    _KW_ALIASES.setdefault("encoding", ("format", "encoding"))
+    _KW_ALIASES.setdefault("format", ("format", "encoding"))
+    _KW_ALIASES.setdefault("algo", ("algorithm", "algo"))
+    _KW_ALIASES.setdefault("algorithm", ("algorithm", "algo"))
+except Exception:
+    pass
 
 def _wrap_timeout(tid, seconds, port_cap=None):
     meta = _BY_ID.get(tid) or {}

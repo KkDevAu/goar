@@ -56,10 +56,35 @@ function __jitWrite(off, arr) {
   for (let i = 0; i < arr.length; i++) v[off + i] = +arr[i];
 }
 self.goarJit = function (op, payload) {
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch (_) { payload = {}; }
+  }
   payload = payload || {};
+  payload = payload || {};
+  if (payload && typeof payload.toJs === "function") {
+    try { payload = payload.toJs({ dict_converter: Object.fromEntries }); } catch (_) {}
+  }
+  if (payload && typeof payload.get === "function" && !Array.isArray(payload)) {
+    const o = {};
+    try {
+      for (const k of ["a", "b", "y", "x", "k"]) {
+        if (payload.has && payload.has(k)) o[k] = payload.get(k);
+      }
+      payload = Object.assign(o, payload);
+    } catch (_) {}
+  }
+  function arr(x) {
+    if (!x) return [];
+    if (x && typeof x.toJs === "function") {
+      try { x = x.toJs(); } catch (_) {}
+    }
+    if (Array.isArray(x)) return x.map(Number);
+    if (typeof x.length === "number") return Array.from(x, Number);
+    return [];
+  }
   if (op === "status") return { ok: true, ready: true, compiled: true, simd: true, lanes: "f64x2", engine: "goar-jit.wasm", kernels: ["dot","sum","scale","saxpy"] };
-  const a = payload.a || [];
-  const b = payload.b || [];
+  const a = arr(payload.a);
+  const b = arr(payload.b);
   if (op === "dot") {
     const n = Math.min(a.length, b.length);
     __jitWrite(0, a); __jitWrite(n + 8, b);

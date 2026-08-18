@@ -19483,10 +19483,35 @@ function __jitWrite(off, arr) {
   for (let i = 0; i < arr.length; i++) v[off + i] = +arr[i];
 }
 self.goarJit = function (op, payload) {
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch (_) { payload = {}; }
+  }
   payload = payload || {};
+  payload = payload || {};
+  if (payload && typeof payload.toJs === "function") {
+    try { payload = payload.toJs({ dict_converter: Object.fromEntries }); } catch (_) {}
+  }
+  if (payload && typeof payload.get === "function" && !Array.isArray(payload)) {
+    const o = {};
+    try {
+      for (const k of ["a", "b", "y", "x", "k"]) {
+        if (payload.has && payload.has(k)) o[k] = payload.get(k);
+      }
+      payload = Object.assign(o, payload);
+    } catch (_) {}
+  }
+  function arr(x) {
+    if (!x) return [];
+    if (x && typeof x.toJs === "function") {
+      try { x = x.toJs(); } catch (_) {}
+    }
+    if (Array.isArray(x)) return x.map(Number);
+    if (typeof x.length === "number") return Array.from(x, Number);
+    return [];
+  }
   if (op === "status") return { ok: true, ready: true, compiled: true, simd: true, lanes: "f64x2", engine: "goar-jit.wasm", kernels: ["dot","sum","scale","saxpy"] };
-  const a = payload.a || [];
-  const b = payload.b || [];
+  const a = arr(payload.a);
+  const b = arr(payload.b);
   if (op === "dot") {
     const n = Math.min(a.length, b.length);
     __jitWrite(0, a); __jitWrite(n + 8, b);
@@ -19843,6 +19868,17 @@ const GOAR_KERNEL_SRC = "\"\"\"GOAR 2.7.1 WASM kernel \u2014 full operator OS in
     const py = global.__pyodide || (typeof unixPy === "function" ? unixPy() : null);
     if (!py) return { ok: false, error: "python not ready" };
     try {
+      if (String(op || "") === "exec" && payload && /\bawait\b/.test(String(payload.code || ""))) {
+        const src = String(payload.code || "");
+        const wrapped =
+          "import json as _j\n" +
+          "async def __goar_main():\n" +
+          src.split("\n").map((l) => "    " + l).join("\n") + "\n" +
+          "_r = await __goar_main()\n" +
+          "(_j.dumps(_r, default=str) if _r is not None else '')\n";
+        const raw = await py.runPythonAsync(wrapped);
+        return { ok: true, stdout: raw == null ? "" : String(raw), stderr: "", result: raw };
+      }
       if (py.globals && py.globals.set) {
         py.globals.set("_k_op", String(op || ""));
         py.globals.set("_k_pl", JSON.stringify(payload || {}));
@@ -19972,6 +20008,9 @@ const GOAR_KERNEL_SRC = "\"\"\"GOAR 2.7.1 WASM kernel \u2014 full operator OS in
 
   function asArr(x) {
     if (!x) return [];
+    if (x && typeof x.toJs === "function") {
+      try { x = x.toJs(); } catch (_) {}
+    }
     if (Array.isArray(x)) return x.map(Number);
     if (typeof x === "string") {
       try { return JSON.parse(x).map(Number); } catch (_) { return []; }
@@ -19980,8 +20019,28 @@ const GOAR_KERNEL_SRC = "\"\"\"GOAR 2.7.1 WASM kernel \u2014 full operator OS in
     return [];
   }
 
+  function unwrapPayload(payload) {
+    if (!payload) return {};
+    if (typeof payload.toJs === "function") {
+      try { return payload.toJs({ dict_converter: Object.fromEntries }) || {}; } catch (_) {}
+    }
+    if (typeof payload.get === "function" && !Array.isArray(payload)) {
+      const o = {};
+      try {
+        ["a", "b", "y", "x", "k"].forEach((k) => {
+          if (payload.has && payload.has(k)) o[k] = payload.get(k);
+        });
+        return o;
+      } catch (_) {}
+    }
+    return payload;
+  }
+
   function goarJit(op, payload) {
-    payload = payload || {};
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch (_) { payload = {}; }
+    }
+    payload = unwrapPayload(payload || {});
     const o = String(op || "");
     if (o === "status") {
       ensureJit();
@@ -20039,7 +20098,7 @@ const GOAR_KERNEL_SRC = "\"\"\"GOAR 2.7.1 WASM kernel \u2014 full operator OS in
     "from js import goarJit as _jit",
     "",
     "def _call(op, **kw):",
-    "    r = _jit(op, kw)",
+    "    r = _jit(op, json.dumps(kw))",
     "    if hasattr(r, 'to_py'):",
     "        r = r.to_py()",
     "    return r",
@@ -21762,8 +21821,13 @@ async function toolWrite(args) {
   let content = args.content ?? "";
   if (!path) return "error: path required";
   content = String(content);
-  const emu = window.__emulator || window.__GOAR_UNIX || (typeof emulator !== "undefined" ? emulator : null);
-  if (!emu) return "error: emulator missing";
+  if (typeof unixWrite === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    unixWrite(path, content);
+    try { window.__GOAR_LAST_WRITE = { path: path, content: content, at: Date.now() }; } catch (_) {}
+    return content.length + " " + path + "\nOK";
+  }
+  const emu = window.__emulator || (typeof emulator !== "undefined" ? emulator : null);
+  if (!emu) return "error: filesystem missing";
 
   try { emu.serial0_send("\u0003"); } catch (_) {}
   await sleep(80);
@@ -21811,6 +21875,13 @@ async function toolWrite(args) {
 async function toolRead(args) {
   const path = (args.path || "").trim();
   const maxb = Math.min(Number(args.max_bytes || 80000), 200000);
+  if (typeof unixRead === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    try {
+      return String(unixRead(path, false)).slice(0, maxb);
+    } catch (e) {
+      return "error: " + (e && e.message ? e.message : e);
+    }
+  }
   const r = await guestExec("head -c " + maxb + " " + JSON.stringify(path), 30000);
   return r.output;
 }
@@ -21863,7 +21934,7 @@ async function toolWebFetch(args) {
   const url = (args.url || "").trim();
   const max = Math.min(Number(args.max_chars || 12000), 50000);
   if (!/^https?:\/\//i.test(url)) return "error: http(s) url required";
-  const render = args.render !== false && args.render !== "false";
+  const render = args.render === true || args.render === "true";
   const extract = args.extract || args.selector ? (args.extract || "1") : "";
   try {
     if (typeof goarHostFetch === "function") {
@@ -21946,6 +22017,17 @@ async function toolEdit(args) {
   const all = !!(args.replace_all || args.replaceAll);
   if (!path) return "error: path required";
   if (oldS === "") return "error: old_string required";
+  if (typeof unixRead === "function" && typeof unixWrite === "function" && (window.__GOAR_UNIX || (typeof Unix !== "undefined" && Unix.ready))) {
+    let t;
+    try { t = String(unixRead(path, false)); } catch (e) {
+      return "error: " + (e && e.message ? e.message : e);
+    }
+    const c = all ? t.split(oldS).length - 1 : (t.indexOf(oldS) >= 0 ? 1 : 0);
+    if (!c) return "error: old_string not found";
+    t = all ? t.split(oldS).join(newS) : t.replace(oldS, newS);
+    unixWrite(path, t);
+    return "matches " + c + "\nok";
+  }
   // Multiline-safe: write helper script (python -c breaks over serial)
   const py =
     "import pathlib,sys\n" +
@@ -22388,9 +22470,26 @@ async function toolWorkspaceTree(args) {
   const path = String((args && args.path) || "/workspace");
   const depth = Math.max(1, Math.min(6, Number((args && args.depth) || 3)));
   const limit = Math.max(20, Math.min(400, Number((args && args.limit) || 220)));
+  const root = path.replace(/\/+$/, "") || "/workspace";
+  const lines = [];
+  if (typeof Unix !== "undefined" && Unix.jsfs) {
+    const keys = [];
+    Unix.jsfs.forEach((_, p) => {
+      if (p === root || p.indexOf(root + "/") === 0) keys.push(p);
+    });
+    keys.sort();
+    for (const p of keys) {
+      const rel = p === root ? root : p;
+      const segs = p === root ? 0 : p.slice(root.length + 1).split("/").length;
+      if (segs > depth) continue;
+      lines.push(rel);
+      if (lines.length >= limit) break;
+    }
+  }
+  if (lines.length) return lines.join("\n");
   if (typeof guestExec !== "function") return "error: guest down";
   const r = await guestExec(
-    "find " + path.replace(/'/g, "") + " -maxdepth " + depth + " 2>/dev/null | head -n " + limit,
+    "ls -la " + JSON.stringify(root),
     12000
   );
   const out = (r && r.output != null) ? r.output : String(r || "");
@@ -23004,6 +23103,18 @@ if not hasattr(hashlib, "pbkdf2_hmac"):
 import sys, importlib, pkgutil
 sys.path.insert(0, "/home/pyodide")
 import pyodide_security as ps
+try:
+    from pyodide_security import _KW_ALIASES
+    _KW_ALIASES.setdefault("text", ("data", "text", "content"))
+    _KW_ALIASES.setdefault("data", ("data", "text"))
+    _KW_ALIASES.setdefault("policy", ("csp", "policy"))
+    _KW_ALIASES.setdefault("csp", ("csp", "policy"))
+    _KW_ALIASES.setdefault("encoding", ("format", "encoding"))
+    _KW_ALIASES.setdefault("format", ("format", "encoding"))
+    _KW_ALIASES.setdefault("algo", ("algorithm", "algo"))
+    _KW_ALIASES.setdefault("algorithm", ("algorithm", "algo"))
+except Exception:
+    pass
 for info in pkgutil.walk_packages(ps.__path__, ps.__name__ + "."):
     try:
         importlib.import_module(info.name)
@@ -23038,6 +23149,18 @@ async function hardenLivePysecTools() {
   await __pyodide.runPythonAsync(`
 import asyncio, inspect
 from pyodide_security import _BY_ID
+try:
+    from pyodide_security import _KW_ALIASES
+    _KW_ALIASES.setdefault("text", ("data", "text", "content"))
+    _KW_ALIASES.setdefault("data", ("data", "text"))
+    _KW_ALIASES.setdefault("policy", ("csp", "policy"))
+    _KW_ALIASES.setdefault("csp", ("csp", "policy"))
+    _KW_ALIASES.setdefault("encoding", ("format", "encoding"))
+    _KW_ALIASES.setdefault("format", ("format", "encoding"))
+    _KW_ALIASES.setdefault("algo", ("algorithm", "algo"))
+    _KW_ALIASES.setdefault("algorithm", ("algorithm", "algo"))
+except Exception:
+    pass
 
 def _wrap_timeout(tid, seconds, port_cap=None):
     meta = _BY_ID.get(tid) or {}
