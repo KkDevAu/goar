@@ -1,7 +1,7 @@
 let CORE_AGENT_TOOLS = [
   { type: "function", function: {
     name: "bash",
-    description: "Execute a shell command in the Alpine Linux sandbox (cwd effectively /workspace). Real BusyBox sh: packages, build, run binaries, git, curl/wget, pip, process control, system inspection. You HAVE a real terminal — use it for verification.",
+    description: "Shell command in Wasm Unix (cwd /workspace). Applets: ls cat grep find curl wget python3 pip. Same files as Python.",
     parameters: { type: "object", properties: {
       command: { type: "string", description: "Shell command to run" },
       timeout_ms: { type: "number", description: "Timeout ms (default 60000)" }
@@ -9,7 +9,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "python_exec",
-    description: "Run Python 3.11 in the sandbox. Pass either inline code OR a path to a .py file (plus optional args). Use after write_file to execute and verify.",
+    description: "Run Python (Pyodide Wasm). Pass inline code or a .py path. Last expression prints. Same /workspace as the shell.",
     parameters: { type: "object", properties: {
       code: { type: "string", description: "Python source for python3 -c" },
       path: { type: "string", description: "Path to .py file on guest" },
@@ -19,7 +19,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "write_file",
-    description: "Write a complete UTF-8 file on the guest. Pass the entire file body in one call — each call replaces the whole file. CPython 3.11 and pip are available. Flask wheels install offline via `pip install --no-index --find-links=/opt/wheels flask`. Prefer /workspace/...",
+    description: "Write a complete UTF-8 file. Each call replaces the whole file. Prefer /workspace/...",
     parameters: { type: "object", properties: {
       path: { type: "string" },
       content: { type: "string", description: "Full file contents" }
@@ -99,10 +99,14 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "web_fetch",
-    description: "Fetch a URL in the browser and return text (HTML stripped). Use after web_search to read docs/pages. Prefer https URLs.",
+    description: "Fetch a URL through cors.manus.space (/api/proxy/:url). Returns text. render=true executes JS and returns the final DOM. extract+selector returns structured JSON.",
     parameters: { type: "object", properties: {
       url: { type: "string" },
-      max_chars: { type: "number" }
+      max_chars: { type: "number" },
+      render: { type: "boolean", description: "Execute JavaScript and return the final HTML DOM" },
+      extract: { type: "string", description: "Set 1 to extract via CSS selector" },
+      selector: { type: "string" },
+      ttl: { type: "number", description: "Cache seconds" }
     }, required: ["url"] }
   }},
   { type: "function", function: {
@@ -140,7 +144,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "guest_http",
-    description: "HTTP via Alpine curl — no browser CORS. Use when pysec live fetch/proxy fails or raw guest fetch is needed. Authorized targets only.",
+    description: "HTTP through the host proxy (no CORS). Use when pysec live fetch fails. Authorized targets only.",
     parameters: {
       type: "object",
       properties: {
@@ -207,7 +211,7 @@ let CORE_AGENT_TOOLS = [
   }},
   { type: "function", function: {
     name: "micropip_install",
-    description: "Install pure-Python package into browser Pyodide (micropip). Prefer for analysis libs before heavier Alpine work.",
+    description: "Install a pure-Python package into this Pyodide (micropip / pip).",
     parameters: { type: "object", properties: {
       package: { type: "string", description: "PyPI name e.g. beautifulsoup4" }
     }, required: ["package"] }
@@ -365,7 +369,7 @@ function rebuildPysecFnMaps() {
 const GOAR_API_TOOLS = [
   { type: "function", function: {
     name: "bash",
-    description: "Run a shell command in Alpine /workspace.",
+    description: "Run a shell command in /workspace.",
     parameters: { type: "object", properties: {
       command: { type: "string" },
       timeout_ms: { type: "number" }
@@ -373,7 +377,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "python_exec",
-    description: "Run Python 3 in Alpine. Pass code or path.",
+    description: "Run Python (Pyodide). Pass code or path.",
     parameters: { type: "object", properties: {
       code: { type: "string" },
       path: { type: "string" },
@@ -390,7 +394,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "read_file",
-    description: "Read a file from Alpine.",
+    description: "Read a file from /workspace.",
     parameters: { type: "object", properties: {
       path: { type: "string" },
       max_bytes: { type: "number" }
@@ -424,7 +428,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "web_fetch",
-    description: "Fetch a URL and return text.",
+    description: "Fetch a URL through the live proxy and return text.",
     parameters: { type: "object", properties: {
       url: { type: "string" }
     }, required: ["url"] }
@@ -437,12 +441,35 @@ const GOAR_API_TOOLS = [
     }, required: ["url"] }
   }},
   { type: "function", function: {
-    name: "pysec",
-    description: "Run a kit tool. tool_id like hash.digest or httpx.probe plus kwargs.",
+    name: "browser",
+    description: "Drive the shared Firefox. action=goto|click|type|eval|find|shot|url|title|content|wait|back|reload. selector for click/type/find. js for eval. Same tab the user sees.",
     parameters: { type: "object", properties: {
-      tool_id: { type: "string" },
-      kwargs: { type: "object" }
-    }, required: ["tool_id"] }
+      action: { type: "string" },
+      url: { type: "string" },
+      selector: { type: "string" },
+      text: { type: "string" },
+      js: { type: "string" },
+      x: { type: "number" },
+      y: { type: "number" },
+      ms: { type: "number" }
+    }, required: ["action"] }
+  }},
+  { type: "function", function: {
+    name: "micropip_install",
+    description: "Install a pure-Python package into this Pyodide session.",
+    parameters: { type: "object", properties: {
+      package: { type: "string" }
+    }, required: ["package"] }
+  }},
+  { type: "function", function: {
+    name: "create_tool",
+    description: "Add a session tool. kind=python|js, name, body. Then call it by name.",
+    parameters: { type: "object", properties: {
+      name: { type: "string" },
+      kind: { type: "string" },
+      body: { type: "string" },
+      description: { type: "string" }
+    }, required: ["name", "body"] }
   }},
   { type: "function", function: {
     name: "scratch",
@@ -461,6 +488,16 @@ const GOAR_API_TOOLS = [
       items: { type: "string" },
       item: { type: "string" }
     }, required: ["action"] }
+  }},
+  { type: "function", function: {
+    name: "create_tool",
+    description: "Add a session tool. kind=python|js, name, body. Then call it by name.",
+    parameters: { type: "object", properties: {
+      name: { type: "string" },
+      kind: { type: "string" },
+      body: { type: "string" },
+      description: { type: "string" }
+    }, required: ["name", "body"] }
   }},
   { type: "function", function: {
     name: "complete_task",

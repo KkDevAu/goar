@@ -116,7 +116,7 @@
 
   /** Guest plane actions */
   const GUEST_ACTIONS = {
-    bash: "Shell command in Alpine /workspace",
+    bash: "Shell command in Wasm Unix /workspace",
     python_exec: "Python 3 inline or file",
     write_file: "Write full file (entire content once)",
     read_file: "Read file",
@@ -138,11 +138,18 @@
     web_search: "Web search",
     web_fetch: "Fetch URL via host fabric",
     http_request: "HTTP request (method/headers/body)",
-    guest_http: "HTTP from Alpine guest (no CORS)",
+    guest_http: "HTTP via host proxy",
+    browse: "Fetch URL AND open it in the shared Firefox together",
+    browser: "Drive Firefox: goto|click|type|eval|find|shot|wait|back|reload",
+    click: "Click selector in the shared Firefox",
+    type: "Type into a field (selector + text)",
+    eval: "Run JS in the page",
+    find: "Query CSS selectors in the page",
+    shot: "Screenshot the page",
+    goto: "Open a URL in the shared Firefox",
     mw_status: "Network fabric status",
     net_diag: "Guest DNS + HTTPS diagnostics",
     env_info: "Sandbox env/net status",
-    kit_status: "Pysec kit status",
     browser_status: "Fetch + gecko + fabric map",
     gecko_status: "In-app Firefox status",
     gecko_open: "Ensure in-app Firefox is up (usually already booted)",
@@ -263,7 +270,7 @@
     tools.push(
       fn(
         "guest",
-        "Alpine /workspace. action=" + Object.keys(GUEST_ACTIONS).join("|") + ". Extra fields go in kwargs or top-level (command,path,content,code).",
+        "Wasm Unix /workspace. action=" + Object.keys(GUEST_ACTIONS).join("|") + ". Extra fields go in kwargs or top-level (command,path,content,code).",
         {
           action: { type: "string" },
           kwargs: { type: "object" },
@@ -330,58 +337,6 @@
           content: { type: "string" },
         },
         ["action"]
-      )
-    );
-
-    tools.push(
-      fn(
-        "kit",
-        "Pyodide + discover + create_tool. action=" + Object.keys(KIT_ACTIONS).join("|"),
-        {
-          action: { type: "string" },
-          kwargs: { type: "object" },
-          query: { type: "string" },
-          name: { type: "string" },
-          body: { type: "string" },
-          package: { type: "string" },
-          data: { type: "string" },
-        },
-        ["action"]
-      )
-    );
-
-    for (const [lane, meta] of Object.entries(LANES)) {
-      const n = (idx.byLane[lane] && idx.byLane[lane].length) || 0;
-      tools.push(
-        fn(
-          meta.name,
-          meta.label +
-            ". Pass tool=<id> and kwargs. Unsure of id → kit discover. Do not list ops.",
-          {
-            tool: {
-              type: "string",
-              description: "Dot-id for this job (discover if unknown)",
-            },
-            kwargs: {
-              type: "object",
-              description: "Arguments for that tool",
-            },
-          },
-          ["tool"]
-        )
-      );
-    }
-
-    tools.push(
-      fn(
-        "pysec",
-        "Any pysec tool by id when category is unclear. Prefer pysec_crypto/http/recon/vuln/analyze. Pass tool_id + kwargs. Never enumerate catalog.",
-        {
-          tool_id: { type: "string", description: "e.g. hash.digest, httpx.probe" },
-          tool: { type: "string", description: "Alias of tool_id" },
-          kwargs: { type: "object" },
-        },
-        []
       )
     );
 
@@ -599,7 +554,7 @@
     args = args && typeof args === "object" ? Object.assign({}, args) : {};
     const n = String(name || "");
 
-    if (n === "guest" || n === "net" || n === "browser" || n === "kv" || n === "mind" || n === "kit") {
+    if (n === "guest" || n === "net" || n === "browser" || n === "kv" || n === "mind") {
       let action = String(args.action || args.tool || args.tool_id || "").trim();
       if (!action) {
         return { error: "action required for " + n };
@@ -613,6 +568,14 @@
       if (n === "kv") {
         const kvAlias = { set: "kv_set", get: "kv_get", del: "kv_del", delete: "kv_del", keys: "kv_keys", status: "kv_status" };
         if (kvAlias[action]) action = kvAlias[action];
+      }
+      const BROWSER_VERBS = {
+        goto: 1, go: 1, open: 1, load: 1, click: 1, type: 1, fill: 1, send_keys: 1,
+        eval: 1, evaluate: 1, execute: 1, find: 1, elements: 1, shot: 1, screenshot: 1,
+        wait: 1, waitfor: 1, url: 1, title: 1, content: 1, html: 1, back: 1, reload: 1, forward: 1,
+      };
+      if ((n === "browser" || n === "net") && BROWSER_VERBS[action]) {
+        return { kind: "core", name: "browser_drive", args: Object.assign({ action: action }, args) };
       }
       const maps = {
         guest: GUEST_ACTIONS,
@@ -678,8 +641,6 @@
       name === "browser" ||
       name === "kv" ||
       name === "mind" ||
-      name === "kit" ||
-      name === "pysec" ||
       (typeof name === "string" && name.indexOf("pysec_") === 0)
     );
   }
@@ -697,20 +658,10 @@
     }
     const askingMap = /\b(tools?|available|securit|pysec|what can|capabilities|kit)\b/.test(q);
     if (askingMap) {
-      const idx = getIndex();
-      const lanes = {};
-      let total = 0;
-      for (const [lane, meta] of Object.entries(LANES)) {
-        const ids = idx.byLane[lane] || [];
-        total += ids.length;
-        lanes[meta.name] = { count: ids.length, examples: ids.slice(0, 10), when: meta.when };
-      }
       return JSON.stringify({
         ok: true,
-        security_tools: total,
-        lanes: lanes,
-        how: "Call pysec_crypto / pysec_http / pysec_recon / pysec_vuln / pysec_analyze with tool=<id> and kwargs. Or pysec with tool_id.",
-        also: { guest: "bash files python", net: "browse fetch Firefox", kit: "micropip create_tool" }
+        use: ["bash", "python_exec", "write_file", "browser", "web_fetch", "browse", "create_tool"],
+        note: "Write Python or drive the browser. Do not list a catalog.",
       });
     }
 
@@ -743,8 +694,8 @@
     if (/\b(bash|shell|python|write|read|edit|grep|glob|mkdir)\b/.test(q)) force = "guest";
     else if (/\b(fetch|http|search|wisp|browser|click|type|screenshot)\b/.test(q)) force = "net";
     else if (/\b(kv|cache|ttl)\b/.test(q)) force = "kv";
-    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "pysec";
-    else if (/\b(wasm|micropip)\b/.test(q)) force = "kit";
+    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "python";
+    else if (/\b(wasm|micropip)\b/.test(q)) force = "guest";
 
     const hits = [];
     function add(via, id, why) {
@@ -766,7 +717,6 @@
       ["net", NET_ACTIONS],
       ["kv", KV_ACTIONS],
       ["mind", MIND_ACTIONS],
-      ["kit", KIT_ACTIONS],
     ]) {
       for (const [id, why] of Object.entries(map)) add(via, id, why);
     }

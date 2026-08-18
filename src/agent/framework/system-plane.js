@@ -2,20 +2,20 @@
  * GOAR system plane — single source of truth so every subsystem complements the others.
  *
  * Planes:
- *  A guest   — Alpine v86 (bash/python/fs/net)
- *  B host    — browser fetch/search + Manus-shaped CORS proxy
- *  C kit     — Pyodide pysec (141) + micropip
+ *  A guest   — Wasm Unix (ash + busybox) on a shared FS; Python is Pyodide
+ *  B host    — browser fetch/search + Manus CORS proxy
+ *  C python  — Pyodide (same runtime as the shell) + live proxy HTTP
  *  D mind    — Adaptive Engineer cognition + ADK compaction
  *  E extend  — create_tool dynamic registry
- *  F gecko   — Firefox WASM agent browser (additive; never replaces v86)
- *  G kv      — HeyPuter kv.js in-memory + IndexedDB cache (additive)
+ *  F gecko   — Firefox WASM agent browser
+ *  G kv      — HeyPuter kv.js in-memory + IndexedDB cache
  *
  * Routing policy (automatic hints injected into LIVE STATUS + tool wrappers):
- *  - Live HTTP in kit  → requires proxy (ensurePysecNetwork)
- *  - Proxy down        → guest_http / web_fetch
- *  - Pure Python lib   → micropip_install first, else guest pip
- *  - Heavy OS / server → guest bash/python + install_flask
- *  - Missing capability→ create_tool (python|js|guest) then use it
+ *  - Live HTTP          → Manus proxy / web_fetch / browser
+ *  - Python             → Pyodide (same process as the shell)
+ *  - pip / micropip     → Pyodide micropip
+ *  - Shell / files      → Wasm Unix applets on the shared FS
+ *  - Missing capability → create_tool (python|js) then use it
  */
 
 const GOAR_PLANES = {
@@ -24,7 +24,7 @@ const GOAR_PLANES = {
   kit: "C",
   mind: "D",
   extend: "E",
-  gecko: "F", // Firefox WASM browser — additive, never replaces v86
+  gecko: "F", // Firefox WASM browser — independent of the Unix plane
   kv: "G", // HeyPuter kv.js cache/memory (IndexedDB) — additive
 };
 
@@ -237,7 +237,7 @@ function enrichToolResult(name, args, out) {
     if (snap.guest.online) {
       hints.push("HINT: try guest_http or bash curl, then open the page in Firefox.");
     } else {
-      hints.push("HINT: Alpine is still starting — use web_fetch if the origin allows CORS, or wait until the guest is ready.");
+      hints.push("HINT: environment is still starting — use web_fetch if the origin allows CORS, or wait until Unix is ready.");
     }
     if (!snap.host.proxyOk) {
       hints.push("HINT: CORS proxy is not ready — retry shortly.");

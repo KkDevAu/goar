@@ -16399,7 +16399,7 @@ document.getElementById("btnFreezeNow")?.addEventListener("click", async () => {
 <!-- ====================================================================== -->
 
 <script data-src="src/agent/operator-core.js">
-const OPERATOR_CORE = `You are GOAR — a coding and security agent. Python is native WebAssembly (Pyodide). The shell is Wasm Unix on the same filesystem. Firefox is shared. Pysec is the security kit.
+const OPERATOR_CORE = `You are GOAR — a coding agent. Python is native WebAssembly (Pyodide). The shell is Wasm Unix on the same filesystem. Firefox is shared. Network is live (proxy + browser).
 
 ## Voice
 Direct. Complete sentences. No emoji. No filler. Short answers for short questions.
@@ -16410,15 +16410,15 @@ Do not narrate tool calls. Do not recap. Do not write staging lines. Call the to
 **Thinking.** Reason in the thinking channel only. Call tools only to change or inspect the environment.
 
 ## When to use tools
-- Code, files, scans, browse, fetch → tools, then a visible reply.
+- Code, files, browse, fetch → tools, then a visible reply.
 - Conversation → reply only.
 Destinations: **response** (what the user reads), **repo** (/workspace — only what they asked to ship), **scratch** (/workspace/.scratch — drafts during a real task). Never write scratch for a greeting.
 
 ## Planes
 - Unix: bash, write_file, read_file, edit_file, python_exec, grep, workspace_tree — same /workspace as Python
-- Python: Pyodide. pip is micropip (pure-Python packages). Last expression prints, like a notebook.
-- Missing tool: create_tool (python on this runtime), then call it. Do not invent a catalog dump.
-- Firefox: browser({ action }) — goto, click, type, eval, find, shot. Same tab the user sees. web_fetch for bytes only.
+- Python: Pyodide. pip is micropip (pure-Python). Last expression prints, like a notebook. HTTP from Python goes through the live proxy.
+- Missing capability: create_tool (python on this runtime), then call it. Do not search a catalog.
+- Firefox: browser({ action }) — goto, click, type, eval, find, shot. Same tab the user sees. web_fetch / browse for bytes plus the page.
 
 ## Change work
 1. Act. Never announce the next step in chat.
@@ -17413,7 +17413,7 @@ async function toolEnvInfo() {
 
   /** Guest plane actions */
   const GUEST_ACTIONS = {
-    bash: "Shell command in Alpine /workspace",
+    bash: "Shell command in Wasm Unix /workspace",
     python_exec: "Python 3 inline or file",
     write_file: "Write full file (entire content once)",
     read_file: "Read file",
@@ -17447,7 +17447,6 @@ async function toolEnvInfo() {
     mw_status: "Network fabric status",
     net_diag: "Guest DNS + HTTPS diagnostics",
     env_info: "Sandbox env/net status",
-    kit_status: "Pysec kit status",
     browser_status: "Fetch + gecko + fabric map",
     gecko_status: "In-app Firefox status",
     gecko_open: "Ensure in-app Firefox is up (usually already booted)",
@@ -17568,7 +17567,7 @@ async function toolEnvInfo() {
     tools.push(
       fn(
         "guest",
-        "Alpine /workspace. action=" + Object.keys(GUEST_ACTIONS).join("|") + ". Extra fields go in kwargs or top-level (command,path,content,code).",
+        "Wasm Unix /workspace. action=" + Object.keys(GUEST_ACTIONS).join("|") + ". Extra fields go in kwargs or top-level (command,path,content,code).",
         {
           action: { type: "string" },
           kwargs: { type: "object" },
@@ -17635,58 +17634,6 @@ async function toolEnvInfo() {
           content: { type: "string" },
         },
         ["action"]
-      )
-    );
-
-    tools.push(
-      fn(
-        "kit",
-        "Pyodide + discover + create_tool. action=" + Object.keys(KIT_ACTIONS).join("|"),
-        {
-          action: { type: "string" },
-          kwargs: { type: "object" },
-          query: { type: "string" },
-          name: { type: "string" },
-          body: { type: "string" },
-          package: { type: "string" },
-          data: { type: "string" },
-        },
-        ["action"]
-      )
-    );
-
-    for (const [lane, meta] of Object.entries(LANES)) {
-      const n = (idx.byLane[lane] && idx.byLane[lane].length) || 0;
-      tools.push(
-        fn(
-          meta.name,
-          meta.label +
-            ". Pass tool=<id> and kwargs. Unsure of id → kit discover. Do not list ops.",
-          {
-            tool: {
-              type: "string",
-              description: "Dot-id for this job (discover if unknown)",
-            },
-            kwargs: {
-              type: "object",
-              description: "Arguments for that tool",
-            },
-          },
-          ["tool"]
-        )
-      );
-    }
-
-    tools.push(
-      fn(
-        "pysec",
-        "Any pysec tool by id when category is unclear. Prefer pysec_crypto/http/recon/vuln/analyze. Pass tool_id + kwargs. Never enumerate catalog.",
-        {
-          tool_id: { type: "string", description: "e.g. hash.digest, httpx.probe" },
-          tool: { type: "string", description: "Alias of tool_id" },
-          kwargs: { type: "object" },
-        },
-        []
       )
     );
 
@@ -17904,7 +17851,7 @@ async function toolEnvInfo() {
     args = args && typeof args === "object" ? Object.assign({}, args) : {};
     const n = String(name || "");
 
-    if (n === "guest" || n === "net" || n === "browser" || n === "kv" || n === "mind" || n === "kit") {
+    if (n === "guest" || n === "net" || n === "browser" || n === "kv" || n === "mind") {
       let action = String(args.action || args.tool || args.tool_id || "").trim();
       if (!action) {
         return { error: "action required for " + n };
@@ -17991,8 +17938,6 @@ async function toolEnvInfo() {
       name === "browser" ||
       name === "kv" ||
       name === "mind" ||
-      name === "kit" ||
-      name === "pysec" ||
       (typeof name === "string" && name.indexOf("pysec_") === 0)
     );
   }
@@ -18010,20 +17955,10 @@ async function toolEnvInfo() {
     }
     const askingMap = /\b(tools?|available|securit|pysec|what can|capabilities|kit)\b/.test(q);
     if (askingMap) {
-      const idx = getIndex();
-      const lanes = {};
-      let total = 0;
-      for (const [lane, meta] of Object.entries(LANES)) {
-        const ids = idx.byLane[lane] || [];
-        total += ids.length;
-        lanes[meta.name] = { count: ids.length, examples: ids.slice(0, 10), when: meta.when };
-      }
       return JSON.stringify({
         ok: true,
-        security_tools: total,
-        lanes: lanes,
-        how: "Call pysec_crypto / pysec_http / pysec_recon / pysec_vuln / pysec_analyze with tool=<id> and kwargs. Or pysec with tool_id.",
-        also: { guest: "bash files python", net: "browse fetch Firefox", kit: "micropip create_tool" }
+        use: ["bash", "python_exec", "write_file", "browser", "web_fetch", "browse", "create_tool"],
+        note: "Write Python or drive the browser. Do not list a catalog.",
       });
     }
 
@@ -18056,8 +17991,8 @@ async function toolEnvInfo() {
     if (/\b(bash|shell|python|write|read|edit|grep|glob|mkdir)\b/.test(q)) force = "guest";
     else if (/\b(fetch|http|search|wisp|browser|click|type|screenshot)\b/.test(q)) force = "net";
     else if (/\b(kv|cache|ttl)\b/.test(q)) force = "kv";
-    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "pysec";
-    else if (/\b(wasm|micropip)\b/.test(q)) force = "kit";
+    else if (/\b(hash|sha|hmac|digest|codec|jwt|nuclei|sqlmap|xss|scan|vuln|recon|dns|csp|cors)\b/.test(q)) force = "python";
+    else if (/\b(wasm|micropip)\b/.test(q)) force = "guest";
 
     const hits = [];
     function add(via, id, why) {
@@ -18079,7 +18014,6 @@ async function toolEnvInfo() {
       ["net", NET_ACTIONS],
       ["kv", KV_ACTIONS],
       ["mind", MIND_ACTIONS],
-      ["kit", KIT_ACTIONS],
     ]) {
       for (const [id, why] of Object.entries(map)) add(via, id, why);
     }
@@ -18567,7 +18501,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "web_fetch",
-    description: "Fetch a URL and return text.",
+    description: "Fetch a URL through the live proxy and return text.",
     parameters: { type: "object", properties: {
       url: { type: "string" }
     }, required: ["url"] }
@@ -18581,7 +18515,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "browser",
-    description: "Drive the shared Firefox. action=goto|click|type|eval|find|shot|url|title|content|wait|back|reload. Use selector for click/type/find (CSS). js for eval. You and the user see the same tab.",
+    description: "Drive the shared Firefox. action=goto|click|type|eval|find|shot|url|title|content|wait|back|reload. selector for click/type/find. js for eval. Same tab the user sees.",
     parameters: { type: "object", properties: {
       action: { type: "string" },
       url: { type: "string" },
@@ -18594,12 +18528,21 @@ const GOAR_API_TOOLS = [
     }, required: ["action"] }
   }},
   { type: "function", function: {
-    name: "pysec",
-    description: "Run a kit tool. tool_id like hash.digest or httpx.probe plus kwargs.",
+    name: "micropip_install",
+    description: "Install a pure-Python package into this Pyodide session.",
     parameters: { type: "object", properties: {
-      tool_id: { type: "string" },
-      kwargs: { type: "object" }
-    }, required: ["tool_id"] }
+      package: { type: "string" }
+    }, required: ["package"] }
+  }},
+  { type: "function", function: {
+    name: "create_tool",
+    description: "Add a session tool. kind=python|js, name, body. Then call it by name.",
+    parameters: { type: "object", properties: {
+      name: { type: "string" },
+      kind: { type: "string" },
+      body: { type: "string" },
+      description: { type: "string" }
+    }, required: ["name", "body"] }
   }},
   { type: "function", function: {
     name: "scratch",
@@ -18621,7 +18564,7 @@ const GOAR_API_TOOLS = [
   }},
   { type: "function", function: {
     name: "create_tool",
-    description: "Add a session tool. kind=python|js, name, body. Then call it by name. Use when the kit does not already do the job.",
+    description: "Add a session tool. kind=python|js, name, body. Then call it by name.",
     parameters: { type: "object", properties: {
       name: { type: "string" },
       kind: { type: "string" },
@@ -19038,19 +18981,18 @@ try {
  * Planes:
  *  A guest   — Wasm Unix (ash + busybox) on a shared FS; Python is Pyodide
  *  B host    — browser fetch/search + Manus CORS proxy
- *  C kit     — Pyodide pysec (141) + micropip (same runtime as guest python)
+ *  C python  — Pyodide (same runtime as the shell) + live proxy HTTP
  *  D mind    — Adaptive Engineer cognition + ADK compaction
  *  E extend  — create_tool dynamic registry
  *  F gecko   — Firefox WASM agent browser
  *  G kv      — HeyPuter kv.js in-memory + IndexedDB cache
  *
  * Routing policy (automatic hints injected into LIVE STATUS + tool wrappers):
- *  - Live HTTP in kit  → requires proxy (ensurePysecNetwork)
- *  - Proxy down        → guest_http / web_fetch
- *  - Python            → Pyodide (same process as the shell)
- *  - pip / micropip    → Pyodide micropip
- *  - Shell / files     → Wasm Unix applets on the shared FS
- *  - Missing capability→ create_tool (python|js) then use it
+ *  - Live HTTP          → Manus proxy / web_fetch / browser
+ *  - Python             → Pyodide (same process as the shell)
+ *  - pip / micropip     → Pyodide micropip
+ *  - Shell / files      → Wasm Unix applets on the shared FS
+ *  - Missing capability → create_tool (python|js) then use it
  */
 
 const GOAR_PLANES = {
